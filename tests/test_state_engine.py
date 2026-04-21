@@ -1,11 +1,10 @@
 """Tests for State Engine."""
 
-import numpy as np
 
-from libs.common.schemas import DetectionClass, Street
+from libs.common.schemas import Street
+from services.ocr_core.ocr import OCREngine
 from services.state_engine.engine import StateEngine, parse_card
 from services.vision_core.detector import VisionDetector
-from services.ocr_core.ocr import OCREngine
 
 
 class TestParseCard:

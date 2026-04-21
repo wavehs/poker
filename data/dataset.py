@@ -15,13 +15,11 @@ import json
 import random
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
 
 from libs.common.schemas import DetectionClass
-
 
 # ─── YOLO class mapping ─────────────────────────────────────────────────────
 
@@ -60,7 +58,7 @@ class Annotation:
         return f"{self.class_id} {self.cx:.6f} {self.cy:.6f} {self.w:.6f} {self.h:.6f}"
 
     @classmethod
-    def from_yolo_line(cls, line: str) -> "Annotation":
+    def from_yolo_line(cls, line: str) -> Annotation:
         parts = line.strip().split()
         return cls(
             class_id=int(parts[0]),
@@ -333,7 +331,7 @@ class PokerFrameDataset:
 
         return {name: len(s) for name, s in splits.items()}
 
-    def export_yolo_yaml(self, output_path: Optional[str | Path] = None) -> Path:
+    def export_yolo_yaml(self, output_path: str | Path | None = None) -> Path:
         """
         Generate data.yaml for Ultralytics YOLO training.
 

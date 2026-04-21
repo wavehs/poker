@@ -1,20 +1,17 @@
 """Tests for Hand Evaluator abstraction and backends."""
 
-import itertools
 import pytest
 
 from services.solver_core.evaluator import (
     BuiltinEvaluator,
     HandEvaluator,
-    card_to_int,
-    int_to_card,
     card_rank,
     card_suit,
+    card_to_int,
     get_best_evaluator,
     get_evaluator_by_name,
-    _evaluate_five_int,
+    int_to_card,
 )
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 

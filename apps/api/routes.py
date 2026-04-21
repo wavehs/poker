@@ -12,7 +12,7 @@ import numpy as np
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from apps.api.pipeline import Pipeline, get_pipeline
+from apps.api.pipeline import get_pipeline
 from libs.common.schemas import FrameAnalysis
 
 router = APIRouter()

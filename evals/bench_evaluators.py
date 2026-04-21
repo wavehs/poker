@@ -10,9 +10,7 @@ Usage:
 
 from __future__ import annotations
 
-import itertools
 import random
-import statistics
 import sys
 import time
 
@@ -22,7 +20,6 @@ sys.path.insert(0, ".")
 from services.solver_core.evaluator import (
     BuiltinEvaluator,
     HandEvaluator,
-    card_to_int,
     int_to_card,
 )
 
@@ -152,7 +149,7 @@ def bench_correctness(evaluators: list[HandEvaluator], num_hands: int = 5000) ->
 def bench_specific_hands(evaluators: list[HandEvaluator]) -> None:
     """Evaluate specific known hands and compare results."""
     print(f"\n{'='*70}")
-    print(f"  SPECIFIC HANDS — Known hand rankings")
+    print("  SPECIFIC HANDS — Known hand rankings")
     print(f"{'='*70}\n")
 
     # Define test hands: (name, cards_as_str)

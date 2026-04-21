@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -48,7 +47,7 @@ class VisionDetector:
 
     def __init__(
         self,
-        model_path: Optional[str] = None,
+        model_path: str | None = None,
         confidence_threshold: float = 0.5,
         device: str = "cpu",
     ) -> None:

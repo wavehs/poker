@@ -14,7 +14,6 @@ from libs.common.schemas import (
     TableState,
 )
 
-
 # ─── Street names ────────────────────────────────────────────────────────────
 
 STREET_NAMES = {

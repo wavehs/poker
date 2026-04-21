@@ -2,15 +2,13 @@
 
 import sys
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import cv2
 import numpy as np
 import pytest
 
 from services.capture_agent.capture import CaptureAgent, CaptureMetrics
-
 
 # ─── CaptureMetrics ─────────────────────────────────────────────────────────
 
