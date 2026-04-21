@@ -1,26 +1,45 @@
 """
 Vision Core — Object detection for poker table elements.
 
-Phase 1: Returns synthetic/mock detections.
-Phase 2+: YOLO11 model inference with real weights.
+Phase 2: Real YOLO11 inference via Ultralytics, with mock fallback.
 """
 
 from __future__ import annotations
 
+import logging
 import random
+import time
 from typing import Optional
 
 import numpy as np
 
 from libs.common.schemas import BoundingBox, Detection, DetectionClass
 
+logger = logging.getLogger(__name__)
+
+
+# ─── Class mapping ──────────────────────────────────────────────────────────
+
+# Maps YOLO class index → DetectionClass
+# Must match data/dataset.py YOLO_CLASSES
+_YOLO_INDEX_TO_CLASS: dict[int, DetectionClass] = {
+    0: DetectionClass.CARD,
+    1: DetectionClass.CHIP_STACK,
+    2: DetectionClass.POT,
+    3: DetectionClass.DEALER_BUTTON,
+    4: DetectionClass.PLAYER_PANEL,
+    5: DetectionClass.BET_AMOUNT,
+    6: DetectionClass.ACTION_BUTTON,
+    7: DetectionClass.BOARD_AREA,
+}
+
 
 class VisionDetector:
     """
     Detects poker table elements in a frame.
-    
-    Phase 1: Mock detector that generates plausible synthetic detections.
-    Phase 2: Will wrap Ultralytics YOLO11 model.
+
+    Phase 2: Wraps Ultralytics YOLO11 for real inference.
+    Falls back to mock detection when no model is loaded.
     """
 
     # Card labels for mock generation
@@ -45,42 +64,179 @@ class VisionDetector:
         self._model = None
         self._mock_mode = model_path is None
 
+        # Metrics
+        self._last_inference_ms: float = 0.0
+        self._total_inferences: int = 0
+
         if not self._mock_mode:
             self._load_model()
 
+    @property
+    def is_mock(self) -> bool:
+        return self._mock_mode
+
+    @property
+    def last_inference_ms(self) -> float:
+        return self._last_inference_ms
+
     def _load_model(self) -> None:
-        """Load YOLO model from weights (Phase 2)."""
-        # TODO: from ultralytics import YOLO; self._model = YOLO(self.model_path)
-        pass
+        """Load YOLO model from weights."""
+        try:
+            from ultralytics import YOLO
+
+            self._model = YOLO(self.model_path)
+            self._mock_mode = False
+            logger.info("YOLO model loaded: %s (device=%s)", self.model_path, self.device)
+        except ImportError:
+            logger.warning("ultralytics not installed, falling back to mock mode")
+            self._mock_mode = True
+        except Exception as e:
+            logger.warning("Failed to load YOLO model '%s': %s. Using mock mode.",
+                          self.model_path, e)
+            self._mock_mode = True
 
     def detect(self, frame: np.ndarray, frame_idx: int = 0) -> list[Detection]:
         """
         Run detection on a single frame.
-        
+
         Args:
             frame: BGR frame as numpy array (H, W, 3).
             frame_idx: Frame index for tracking.
-            
+
         Returns:
             List of Detection objects.
         """
+        t0 = time.perf_counter()
+
         if self._mock_mode:
-            return self._mock_detect(frame, frame_idx)
-        return self._real_detect(frame, frame_idx)
+            detections = self._mock_detect(frame, frame_idx)
+        else:
+            detections = self._real_detect(frame, frame_idx)
+
+        self._last_inference_ms = (time.perf_counter() - t0) * 1000
+        self._total_inferences += 1
+
+        return detections
+
+    def detect_batch(
+        self,
+        frames: list[np.ndarray],
+        frame_idx_start: int = 0,
+    ) -> list[list[Detection]]:
+        """
+        Run detection on a batch of frames.
+
+        Args:
+            frames: List of BGR frames.
+            frame_idx_start: Starting frame index.
+
+        Returns:
+            List of detection lists, one per frame.
+        """
+        if self._mock_mode:
+            return [
+                self._mock_detect(f, frame_idx_start + i)
+                for i, f in enumerate(frames)
+            ]
+
+        return self._real_detect_batch(frames, frame_idx_start)
 
     def _real_detect(self, frame: np.ndarray, frame_idx: int) -> list[Detection]:
+        """Run real YOLO inference on a single frame."""
+        if self._model is None:
+            return []
+
+        try:
+            results = self._model.predict(
+                frame,
+                conf=self.confidence_threshold,
+                device=self.device,
+                verbose=False,
+            )
+            return self._parse_results(results, frame_idx)
+        except Exception as e:
+            logger.warning("YOLO inference failed: %s", e)
+            return []
+
+    def _real_detect_batch(
+        self,
+        frames: list[np.ndarray],
+        frame_idx_start: int,
+    ) -> list[list[Detection]]:
+        """Run real YOLO inference on a batch of frames."""
+        if self._model is None:
+            return [[] for _ in frames]
+
+        try:
+            results = self._model.predict(
+                frames,
+                conf=self.confidence_threshold,
+                device=self.device,
+                verbose=False,
+            )
+
+            all_detections: list[list[Detection]] = []
+            for i, result in enumerate(results):
+                detections = self._parse_results([result], frame_idx_start + i)
+                all_detections.append(detections)
+
+            return all_detections
+        except Exception as e:
+            logger.warning("YOLO batch inference failed: %s", e)
+            return [[] for _ in frames]
+
+    def _parse_results(self, results, frame_idx: int) -> list[Detection]:
         """
-        Run real YOLO inference (Phase 2 stub).
+        Parse Ultralytics Results into Detection objects.
+
+        Args:
+            results: List of ultralytics.engine.results.Results objects.
+            frame_idx: Frame index for the detection.
+
+        Returns:
+            List of Detection objects.
         """
-        # TODO: Implement real inference
-        # results = self._model(frame, device=self.device)
-        # return self._parse_results(results, frame_idx)
-        return []
+        detections: list[Detection] = []
+
+        for result in results:
+            if result.boxes is None:
+                continue
+
+            boxes = result.boxes
+            for i in range(len(boxes)):
+                # Get box coordinates (xyxy format)
+                x1, y1, x2, y2 = boxes.xyxy[i].tolist()
+                conf = float(boxes.conf[i])
+                cls_id = int(boxes.cls[i])
+
+                # Map class
+                det_class = _YOLO_INDEX_TO_CLASS.get(cls_id, DetectionClass.CARD)
+
+                # Convert xyxy to xywh
+                w = x2 - x1
+                h = y2 - y1
+
+                detection = Detection(
+                    detection_class=det_class,
+                    bbox=BoundingBox(
+                        x=x1,
+                        y=y1,
+                        w=w,
+                        h=h,
+                        confidence=conf,
+                    ),
+                    label="",  # Label will be filled by OCR or post-processing
+                    frame_idx=frame_idx,
+                    timestamp_ms=time.time() * 1000,
+                )
+                detections.append(detection)
+
+        return detections
 
     def _mock_detect(self, frame: np.ndarray, frame_idx: int) -> list[Detection]:
         """
         Generate plausible mock detections for development.
-        
+
         Generates:
         - 2 hero hole cards
         - 0-5 community cards

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Poker Helper — real-time external poker assistant overlay">
+    <title>♠️ Poker Helper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- ── Header ── -->
+        <header class="header">
+            <div class="header__logo">
+                <span class="header__icon">♠️</span>
+                <h1 class="header__title">Poker Helper</h1>
+                <span class="header__badge">PHASE 1</span>
+            </div>
+            <div class="header__controls">
+                <div class="header__status" id="connection-status">
+                    <span class="status-dot status-dot--disconnected"></span>
+                    <span>Offline</span>
+                </div>
+                <button class="btn btn--primary" id="btn-analyze">
+                    ⚡ Анализ
+                </button>
+                <button class="btn btn--ghost" id="btn-auto" data-active="false">
+                    🔄 Авто
+                </button>
+            </div>
+        </header>
+
+        <!-- ── Main Grid ── -->
+        <main class="main">
+            <!-- Left: Recommendation Panel -->
+            <section class="panel panel--recommendation" id="recommendation-panel">
+                <div class="panel__header">
+                    <h2 class="panel__title">Рекомендация</h2>
+                    <span class="panel__badge" id="street-badge">—</span>
+                </div>
+
+                <div class="recommendation" id="recommendation">
+                    <div class="recommendation__action" id="best-action">
+                        <span class="recommendation__action-label">Ожидание...</span>
+                    </div>
+
+                    <div class="recommendation__metrics">
+                        <div class="metric">
+                            <span class="metric__label">Эквити</span>
+                            <span class="metric__value" id="equity">—</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric__label">Сила руки</span>
+                            <span class="metric__value" id="hand-strength">—</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric__label">Пот-оддсы</span>
+                            <span class="metric__value" id="pot-odds">—</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric__label">SPR</span>
+                            <span class="metric__value" id="spr">—</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric__label">Эфф. стек</span>
+                            <span class="metric__value" id="eff-stack">—</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric__label">Пот</span>
+                            <span class="metric__value" id="pot-size">—</span>
+                        </div>
+                    </div>
+
+                    <div class="recommendation__actions-list" id="all-actions">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <!-- Explanation -->
+                <div class="explanation" id="explanation">
+                    <div class="explanation__text">Нажмите "Анализ" для начала</div>
+                </div>
+            </section>
+
+            <!-- Right: Confidence & Debug -->
+            <aside class="panel panel--debug">
+                <div class="panel__header">
+                    <h2 class="panel__title">Уверенность</h2>
+                </div>
+
+                <div class="confidence-bars" id="confidence">
+                    <div class="confidence-bar">
+                        <span class="confidence-bar__label">Vision</span>
+                        <div class="confidence-bar__track">
+                            <div class="confidence-bar__fill" id="conf-vision" style="width: 0%"></div>
+                        </div>
+                        <span class="confidence-bar__value" id="conf-vision-val">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <span class="confidence-bar__label">OCR</span>
+                        <div class="confidence-bar__track">
+                            <div class="confidence-bar__fill" id="conf-ocr" style="width: 0%"></div>
+                        </div>
+                        <span class="confidence-bar__value" id="conf-ocr-val">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <span class="confidence-bar__label">State</span>
+                        <div class="confidence-bar__track">
+                            <div class="confidence-bar__fill" id="conf-state" style="width: 0%"></div>
+                        </div>
+                        <span class="confidence-bar__value" id="conf-state-val">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <span class="confidence-bar__label">Рекоменд.</span>
+                        <div class="confidence-bar__track">
+                            <div class="confidence-bar__fill" id="conf-rec" style="width: 0%"></div>
+                        </div>
+                        <span class="confidence-bar__value" id="conf-rec-val">0%</span>
+                    </div>
+                </div>
+
+                <!-- Cards display -->
+                <div class="panel__header" style="margin-top: 1.5rem">
+                    <h2 class="panel__title">Карты</h2>
+                </div>
+                <div class="cards-display">
+                    <div class="cards-group">
+                        <span class="cards-group__label">Рука</span>
+                        <div class="cards-group__cards" id="hero-cards">
+                            <span class="card-placeholder">?</span>
+                            <span class="card-placeholder">?</span>
+                        </div>
+                    </div>
+                    <div class="cards-group">
+                        <span class="cards-group__label">Борд</span>
+                        <div class="cards-group__cards" id="board-cards">
+                            <span class="card-placeholder">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Debug: Detections -->
+                <div class="panel__header" style="margin-top: 1.5rem">
+                    <h2 class="panel__title">Детекции</h2>
+                    <span class="panel__badge" id="detection-count">0</span>
+                </div>
+                <div class="debug-log" id="debug-log">
+                    <div class="debug-log__empty">Нет данных</div>
+                </div>
+
+                <!-- Latency -->
+                <div class="latency" id="latency">
+                    <span class="latency__label">Латентность</span>
+                    <span class="latency__value" id="latency-value">—</span>
+                </div>
+            </aside>
+        </main>
+
+        <!-- ── Danger Banner ── -->
+        <div class="danger-banner" id="danger-banner" hidden>
+            ⚠️ Низкая уверенность — рекомендация может быть неточной!
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -4,13 +4,23 @@ uvicorn[standard]>=0.30.0
 pydantic>=2.7.0
 websockets>=12.0
 
-# Vision & ML (mocked in Phase 1, needed for interfaces)
+# Vision & ML
 opencv-python-headless>=4.9.0
 numpy>=1.26.0
 Pillow>=10.3.0
+ultralytics>=8.3.0
 
 # Screen capture
 mss>=9.0.0
+dxcam>=0.4.0; sys_platform == "win32"
+
+# OCR
+paddlepaddle>=2.6.0
+paddleocr>=2.8.0
+
+# Fast hand evaluators (Phase 3)
+# eval7>=0.1.9  # Optional: requires C compiler (Cython). Install manually if available.
+treys>=0.1.8
 
 # Utilities
 orjson>=3.10.0

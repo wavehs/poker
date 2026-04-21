@@ -79,6 +79,7 @@ class StateEngine:
         ocr_results: list[OCRResult],
         frame_idx: int = 0,
         timestamp_ms: float = 0.0,
+        tracked_objects: list[TrackedObject] | None = None,
     ) -> tuple[TableState, list[TrackedObject]]:
         """
         Process new frame data and produce updated canonical state.
@@ -88,6 +89,8 @@ class StateEngine:
             ocr_results: OCR results for this frame.
             frame_idx: Frame index.
             timestamp_ms: Frame timestamp.
+            tracked_objects: Pre-computed tracked objects from ObjectTracker.
+                             If None, simple internal tracking is used.
             
         Returns:
             Tuple of (TableState, list of TrackedObjects).
@@ -111,7 +114,12 @@ class StateEngine:
         pot = self._extract_pot(detections, ocr_results)
         players = self._extract_players(detections, ocr_results)
         dealer_seat = self._extract_dealer(detections)
-        tracked = self._build_tracked_objects(detections)
+
+        # Use external tracker if provided, else build simple tracked objects
+        if tracked_objects is not None:
+            tracked = tracked_objects
+        else:
+            tracked = self._build_tracked_objects(detections)
 
         # Determine street
         street = self._determine_street(len(community_cards))
@@ -226,11 +234,11 @@ class StateEngine:
             if d.detection_class == DetectionClass.PLAYER_PANEL
         ]
 
-        # Map OCR results to panels by proximity
-        stack_values = {
-            ocr.bbox: ocr for ocr in ocr_results
+        # Collect stack OCR results
+        stack_ocr_results = [
+            ocr for ocr in ocr_results
             if ocr.field_type == "stack"
-        }
+        ]
 
         for i, panel in enumerate(panel_detections):
             stack = 0.0
@@ -244,7 +252,7 @@ class StateEngine:
                 pass
 
             # Try OCR results for stack
-            for _, ocr in stack_values.items():
+            for ocr in stack_ocr_results:
                 try:
                     stack = float(ocr.text)
                     stack_conf = ocr.confidence
