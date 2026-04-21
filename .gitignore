@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+docker-compose.override.yml
+
+# Data
+data/raw_frames/*.png
+data/raw_frames/*.jpg
+data/sample_frames/*.png
+data/sample_frames/*.jpg
+data/synthetic_tables/output/
+
+# Models
+models/
+*.pt
+*.onnx
+*.engine
+
+# Logs
+logs/
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Node (UI)
+node_modules/
+apps/ui/dist/
