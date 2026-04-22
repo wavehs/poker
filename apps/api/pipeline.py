@@ -10,17 +10,12 @@ Phase 2: Adds ObjectTracker integration, per-stage profiling, and StageTimings.
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 import numpy as np
 
 from libs.common.profiler import PipelineProfiler
 from libs.common.schemas import (
-    ConfidenceReport,
     FrameAnalysis,
-    Recommendation,
-    Action,
-    ActionType,
 )
 from libs.common.schemas_ext import StageTimings
 from services.capture_agent.capture import CaptureAgent

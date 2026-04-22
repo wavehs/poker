@@ -11,7 +11,8 @@ import logging
 import statistics
 import time
 from collections import defaultdict
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,12 @@ class PipelineProfiler:
     class _MeasureContext:
         """Context manager for measuring a stage."""
 
-        def __init__(self, profiler: "PipelineProfiler", stage: str) -> None:
+        def __init__(self, profiler: PipelineProfiler, stage: str) -> None:
             self._profiler = profiler
             self._stage = stage
             self._start: float = 0.0
 
-        def __enter__(self) -> "_MeasureContext":
+        def __enter__(self) -> _MeasureContext:
             self._start = time.perf_counter()
             return self
 

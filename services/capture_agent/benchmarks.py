@@ -11,8 +11,6 @@ import statistics
 import sys
 import time
 
-import numpy as np
-
 
 def benchmark_backend(backend: str, num_frames: int = 50) -> dict | None:
     """Benchmark a specific capture backend."""
@@ -67,7 +65,7 @@ def print_report(results: list[dict]) -> None:
     for r in results:
         print(f"\n  Backend: {r['backend']}")
         print(f"  Frames:  {r['frames']}")
-        print(f"  ─────────────────────────────")
+        print("  ─────────────────────────────")
         print(f"  Avg:     {r['avg_ms']:>8.2f} ms")
         print(f"  Median:  {r['median_ms']:>8.2f} ms")
         print(f"  P95:     {r['p95_ms']:>8.2f} ms")

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from libs.common.schemas import ActionType, FrameAnalysis
 from apps.api.pipeline import Pipeline
+from libs.common.schemas import FrameAnalysis
 
 
 class TestPipeline:
@@ -73,6 +73,7 @@ class TestPipelineAPI:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from apps.api.main import app
         return TestClient(app)
 
@@ -94,6 +95,7 @@ class TestPipelineAPI:
     def test_analyze_frame_base64(self, client):
         """Test base64 frame upload."""
         import base64
+
         import cv2
 
         frame = np.zeros((100, 100, 3), dtype=np.uint8)

@@ -10,9 +10,8 @@ from __future__ import annotations
 import logging
 import sys
 import time
-from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 
 import cv2
 import numpy as np
@@ -124,7 +123,7 @@ class CaptureAgent:
     def __init__(
         self,
         source: str = "auto",
-        region: Optional[dict[str, int]] = None,
+        region: dict[str, int] | None = None,
         fps_target: float = 5.0,
     ) -> None:
         """
@@ -183,7 +182,7 @@ class CaptureAgent:
 
     # ─── Context manager ─────────────────────────────────────────────────
 
-    def __enter__(self) -> "CaptureAgent":
+    def __enter__(self) -> CaptureAgent:
         return self
 
     def __exit__(self, *exc) -> None:

@@ -14,17 +14,12 @@ import math
 import random
 import time
 from collections import Counter
-from functools import lru_cache
-from typing import Optional
 
-from libs.common.schemas import Card, Rank, Suit, TableState
+from libs.common.schemas import Card, Rank, Suit
 from services.solver_core.evaluator import (
-    BuiltinEvaluator,
     HandEvaluator,
-    card_to_int,
     get_best_evaluator,
 )
-
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -297,7 +292,7 @@ class EquitySolver:
         hole_cards: list[Card],
         community_cards: list[Card],
         num_opponents: int = 1,
-        simulations: Optional[int] = None,
+        simulations: int | None = None,
     ) -> float:
         """
         Estimate equity via Monte Carlo simulation.

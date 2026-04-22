@@ -2,8 +2,6 @@
 
 import time
 
-import pytest
-
 from libs.common.profiler import LatencyBudget, PipelineProfiler, profile_stage
 
 

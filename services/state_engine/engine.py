@@ -8,7 +8,6 @@ Implements temporal smoothing, confidence aggregation, and anomaly detection.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Optional
 
 from libs.common.schemas import (
     Card,
@@ -22,7 +21,6 @@ from libs.common.schemas import (
     TableState,
     TrackedObject,
 )
-
 
 # ─── Card parsing helpers ────────────────────────────────────────────────────
 

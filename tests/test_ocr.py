@@ -1,26 +1,22 @@
 """Tests for OCR Core — backends, preprocessing, and engine."""
 
-import numpy as np
-import pytest
 import cv2
+import numpy as np
 
-from libs.common.schemas import BoundingBox, Detection, DetectionClass, OCRResult
-from services.ocr_core.ocr import OCREngine
+from libs.common.schemas import BoundingBox, Detection, DetectionClass
 from services.ocr_core.backends import (
     MockOCRBackend,
-    PaddleOCRBackend,
-    EasyOCRBackend,
     create_backend,
 )
+from services.ocr_core.ocr import OCREngine
 from services.ocr_core.preprocess import (
-    preprocess_for_ocr,
-    crop_bbox,
-    _to_grayscale,
     _auto_invert,
-    _threshold_otsu,
     _resize_height,
+    _threshold_otsu,
+    _to_grayscale,
+    crop_bbox,
+    preprocess_for_ocr,
 )
-
 
 # ─── MockOCRBackend ──────────────────────────────────────────────────────────
 
