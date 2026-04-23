@@ -9,7 +9,9 @@ Phase 2: Adds ObjectTracker integration, per-stage profiling, and StageTimings.
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -54,6 +56,11 @@ class Pipeline:
         self.explainer = explainer or Explainer()
         self.tracker = tracker  # None = no tracking
         self.profiler = PipelineProfiler() if enable_profiling else None
+
+        self.session_file = Path(f"data/sessions/{int(time.time())}.jsonl")
+        self.session_file.parent.mkdir(parents=True, exist_ok=True)
+        self._last_is_hand_in_progress = False
+        self._current_hand_data = None
 
     def analyze_frame(
         self,
@@ -137,6 +144,25 @@ class Pipeline:
 
         processing_time = (time.perf_counter() - t0) * 1000
         timings.total_ms = processing_time
+
+        is_in_progress = table_state.is_hand_in_progress
+        if is_in_progress:
+            hero = table_state.hero
+            self._current_hand_data = {
+                "hole_cards": [c.model_dump() for c in hero.hole_cards] if hero else [],
+                "board": [c.model_dump() for c in table_state.community_cards],
+                "action_taken": hero.last_action.value if hero and hero.last_action else None,
+                "recommended_action": recommendation.best_action.action_type.value if recommendation and recommendation.best_action else None,
+                "pot_size": table_state.pot
+            }
+        elif self._last_is_hand_in_progress and not is_in_progress:
+            # Hand just finished, write to file
+            if self._current_hand_data:
+                with open(self.session_file, "a") as f:
+                    f.write(json.dumps(self._current_hand_data) + "\n")
+                self._current_hand_data = None
+
+        self._last_is_hand_in_progress = is_in_progress
 
         # Record profiling data
         if self.profiler:
