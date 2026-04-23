@@ -15,7 +15,7 @@ import numpy as np
 
 from libs.common.schemas import BoundingBox, Detection, DetectionClass, OCRResult
 from services.ocr_core.backends import OCRBackend, create_backend
-from services.ocr_core.preprocess import crop_bbox, preprocess_for_ocr
+from services.ocr_core.preprocess import contrast_boost, crop_bbox, preprocess_for_ocr, upscale_x2
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,50 @@ class OCREngine:
 
     # ─── Real OCR ────────────────────────────────────────────────────────
 
+    def _run_fallback_pipeline(self, crop: np.ndarray, field_type: str) -> tuple[str, float]:
+        """
+        Run OCR with fallbacks:
+        1. Standard preprocessing
+        2. Contrast boost
+        3. Upscale x2 + threshold
+        4. Original crop
+        """
+        best_conf = 0.0
+        best_text = ""
+
+        def evaluate_results(raw_results):
+            nonlocal best_conf, best_text
+            if raw_results:
+                text, conf, _ = max(raw_results, key=lambda r: r[1])
+                if conf > best_conf:
+                    best_conf = conf
+                    best_text = text
+
+        # 1. Attempt standard pipeline
+        processed = preprocess_for_ocr(crop, field_type=field_type)
+        evaluate_results(self._backend_impl.recognize(processed))
+
+        # 2. Fallback: Contrast Boost
+        if best_conf < 0.75:
+            cb_crop = contrast_boost(crop)
+            processed = preprocess_for_ocr(cb_crop, field_type=field_type)
+            evaluate_results(self._backend_impl.recognize(processed))
+
+        # 3. Fallback: Upscale x2
+        if best_conf < 0.75:
+            up_crop = upscale_x2(crop)
+            # upscale_x2 now returns a binary image. We still pass it to preprocess_for_ocr
+            # which will handle it properly if generic or just return it.
+            processed = preprocess_for_ocr(up_crop, field_type=field_type)
+            evaluate_results(self._backend_impl.recognize(processed))
+
+        # 4. Fallback: Original crop
+        if best_conf < 0.75:
+            evaluate_results(self._backend_impl.recognize(crop))
+
+        return best_text, best_conf
+
+
     def _real_ocr(self, frame: np.ndarray, detection: Detection) -> OCRResult | None:
         """Real OCR on a detection region."""
         bbox = detection.bbox
@@ -133,27 +177,15 @@ class OCREngine:
         # Determine field type
         field_type = self._field_type_from_detection(detection)
 
-        # Preprocess
-        processed = preprocess_for_ocr(crop, field_type=field_type)
-
-        # Run OCR backend
         t0 = time.perf_counter()
-        raw_results = self._backend_impl.recognize(processed)
+
+        best_text, best_conf = self._run_fallback_pipeline(crop, field_type)
         latency_ms = (time.perf_counter() - t0) * 1000
 
-        if not raw_results:
-            # Fallback: try with original crop (no preprocessing)
-            raw_results = self._backend_impl.recognize(crop)
-
-        if not raw_results:
+        if not best_text.strip():
             return None
 
-        # Take best result
-        best_text, best_conf, _ = max(raw_results, key=lambda r: r[1])
         best_text = best_text.strip()
-
-        if not best_text:
-            return None
 
         # Clean numeric text
         if field_type in ("pot", "stack", "bet", "blind"):
@@ -161,15 +193,31 @@ class OCREngine:
 
         confidence = min(1.0, best_conf + self.confidence_boost)
 
+        low_confidence = False
+        if confidence < 0.6:
+            low_confidence = True
+
+        if not low_confidence and field_type in ("pot", "bet"):
+            try:
+                num_val = float(best_text)
+                if num_val < 0 or num_val > 10_000_000:
+                    low_confidence = True
+                    logger.warning(f"Validation failed for {field_type}: {num_val} is out of range [0, 10_000_000]")
+            except ValueError:
+                low_confidence = True
+                logger.warning(f"Validation failed for {field_type}: {best_text} is not a valid number")
+
         logger.debug("OCR [%s]: '%s' (conf=%.2f, %.1fms)",
                      field_type, best_text, confidence, latency_ms)
 
-        return OCRResult(
+        res = OCRResult(
             text=best_text,
             confidence=confidence,
             bbox=bbox,
             field_type=field_type,
         )
+        object.__setattr__(res, "low_confidence", low_confidence)
+        return res
 
     def _real_ocr_region(
         self,
@@ -182,29 +230,40 @@ class OCREngine:
         if crop.size < 10:
             return None
 
-        processed = preprocess_for_ocr(crop, field_type=field_type)
-        raw_results = self._backend_impl.recognize(processed)
+        best_text, best_conf = self._run_fallback_pipeline(crop, field_type)
 
-        if not raw_results:
-            raw_results = self._backend_impl.recognize(crop)
-
-        if not raw_results:
+        if not best_text.strip():
             return None
 
-        best_text, best_conf, _ = max(raw_results, key=lambda r: r[1])
         best_text = best_text.strip()
-        if not best_text:
-            return None
 
         if field_type in ("pot", "stack", "bet", "blind"):
             best_text = self._clean_numeric(best_text)
 
-        return OCRResult(
+        confidence = min(1.0, best_conf + self.confidence_boost)
+
+        low_confidence = False
+        if confidence < 0.6:
+            low_confidence = True
+
+        if not low_confidence and field_type in ("pot", "bet"):
+            try:
+                num_val = float(best_text)
+                if num_val < 0 or num_val > 10_000_000:
+                    low_confidence = True
+                    logger.warning(f"Validation failed for {field_type}: {num_val} is out of range [0, 10_000_000]")
+            except ValueError:
+                low_confidence = True
+                logger.warning(f"Validation failed for {field_type}: {best_text} is not a valid number")
+
+        res = OCRResult(
             text=best_text,
-            confidence=min(1.0, best_conf + self.confidence_boost),
+            confidence=confidence,
             bbox=bbox,
             field_type=field_type,
         )
+        object.__setattr__(res, "low_confidence", low_confidence)
+        return res
 
     # ─── Mock OCR (Phase 1 behavior) ─────────────────────────────────────
 

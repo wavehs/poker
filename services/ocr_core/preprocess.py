@@ -157,6 +157,48 @@ def _pad(gray: np.ndarray, px: int = 4) -> np.ndarray:
     )
 
 
+def contrast_boost(img: np.ndarray, alpha: float = 1.5, beta: int = 0) -> np.ndarray:
+    """
+    Increase image contrast using cv2.convertScaleAbs.
+
+    Args:
+        img: Input image (BGR or Grayscale).
+        alpha: Contrast control (1.0-3.0).
+        beta: Brightness control (0-100).
+
+    Returns:
+        Contrast-boosted image.
+    """
+    if img is None or img.size == 0:
+        return img
+    return cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+
+
+def upscale_x2(img: np.ndarray) -> np.ndarray:
+    """
+    Upscale image by 2x using bicubic interpolation and apply thresholding.
+
+    Args:
+        img: Input image.
+
+    Returns:
+        Upscaled and thresholded image.
+    """
+    if img is None or img.size == 0:
+        return img
+    h, w = img.shape[:2]
+    upscaled = cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+
+    # Apply thresholding
+    gray = _to_grayscale(upscaled)
+    gray = _auto_invert(gray)
+    binary = _threshold_otsu(gray)
+
+    # If the original image was BGR, we can optionally keep it binary grayscale
+    # Since OCR backend accepts both, we'll return the binary image.
+    return binary
+
+
 # ─── Crop utilities ──────────────────────────────────────────────────────────
 
 

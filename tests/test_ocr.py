@@ -56,7 +56,19 @@ class TestCreateBackend:
 # ─── Preprocessing ───────────────────────────────────────────────────────────
 
 
+from services.ocr_core.preprocess import contrast_boost, upscale_x2
+
 class TestPreprocessing:
+    def test_contrast_boost(self):
+        img = np.full((10, 10, 3), 100, dtype=np.uint8)
+        boosted = contrast_boost(img, alpha=1.5, beta=0)
+        assert np.array_equal(boosted, np.full((10, 10, 3), 150, dtype=np.uint8))
+
+    def test_upscale_x2(self):
+        img = np.zeros((10, 20, 3), dtype=np.uint8)
+        upscaled = upscale_x2(img)
+        assert upscaled.shape == (20, 40)
+
     def test_to_grayscale_bgr(self):
         img = np.random.randint(0, 255, (50, 100, 3), dtype=np.uint8)
         gray = _to_grayscale(img)
@@ -244,3 +256,96 @@ class TestOCRSyntheticImage:
         # Should be mostly binary
         unique = set(processed.flatten())
         assert 0 in unique or 255 in unique
+
+# ─── OCREngine — Fallbacks and Validation ────────────────────────────────────
+
+class MockRealBackend:
+    def __init__(self, responses):
+        self.name = "mock_real"
+        self.is_available = True
+        self.responses = responses
+        self.call_count = 0
+
+    def recognize(self, crop):
+        if self.call_count < len(self.responses):
+            res = self.responses[self.call_count]
+            self.call_count += 1
+            return res
+        return []
+
+class TestOCRFallbackAndValidation:
+    def test_ocr_fallback_pipeline(self, monkeypatch):
+        engine = OCREngine(backend="mock")
+        # override private backend with our mock sequence
+        mock_backend = MockRealBackend([
+            [], # 1. standard fails
+            [], # 2. contrast boost fails
+            [("1000", 0.8, [])], # 3. upscale succeeds
+        ])
+        engine._backend_impl = mock_backend
+        engine._use_real_ocr = True
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=50, confidence=0.9)
+        det = Detection(detection_class=DetectionClass.POT, bbox=bbox, label="")
+
+        result = engine._real_ocr(frame, det)
+        assert result is not None
+        assert result.text == "1000"
+        assert result.confidence == 0.8
+        assert not getattr(result, "low_confidence", False)
+
+    def test_low_confidence_flag(self):
+        engine = OCREngine(backend="mock")
+        mock_backend = MockRealBackend([
+            [("500", 0.5, [])], # standard succeeds but low conf
+            [], # contrast fails
+            [], # upscale fails
+            [], # original fails
+        ])
+        engine._backend_impl = mock_backend
+        engine._use_real_ocr = True
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=50, confidence=0.9)
+        det = Detection(detection_class=DetectionClass.POT, bbox=bbox, label="")
+
+        result = engine._real_ocr(frame, det)
+        assert result is not None
+        assert result.text == "500"
+        assert result.confidence == 0.5
+        assert getattr(result, "low_confidence", False) is True
+
+    def test_pot_bet_validation_out_of_range(self):
+        engine = OCREngine(backend="mock")
+        mock_backend = MockRealBackend([
+            [("15000000", 0.9, [])], # high conf but out of range
+        ])
+        engine._backend_impl = mock_backend
+        engine._use_real_ocr = True
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=50, confidence=0.9)
+        det = Detection(detection_class=DetectionClass.POT, bbox=bbox, label="")
+
+        result = engine._real_ocr(frame, det)
+        assert result is not None
+        assert result.text == "15000000"
+        assert getattr(result, "low_confidence", False) is True
+
+    def test_pot_bet_validation_invalid_number(self):
+        engine = OCREngine(backend="mock")
+        mock_backend = MockRealBackend([
+            [("abc", 0.9, [])], # high conf but not a number
+        ])
+        engine._backend_impl = mock_backend
+        engine._use_real_ocr = True
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=50, confidence=0.9)
+        det = Detection(detection_class=DetectionClass.POT, bbox=bbox, label="")
+
+        result = engine._real_ocr(frame, det)
+        assert result is not None
+        assert result.text == "abc"
+        assert getattr(result, "low_confidence", False) is True
