@@ -18,6 +18,7 @@ from libs.common.schemas import (
     Street,
     TableState,
 )
+from services.policy_layer.preflop_charts import get_preflop_action
 from services.solver_core.solver import EquitySolver
 
 
@@ -120,6 +121,45 @@ class PolicyEngine:
         )
         to_call = max(0.0, max_bet - hero.bet)
 
+        # ── Preflop Chart Check
+        chart_action_type = None
+        if (
+            state.street == Street.PREFLOP
+            and hero
+            and len(hero.hole_cards) == 2
+            and all(c.is_known for c in hero.hole_cards)
+        ):
+            ranks = "23456789TJQKA"
+            c1, c2 = hero.hole_cards[0], hero.hole_cards[1]
+            r1, s1 = c1.rank.value, c1.suit.value
+            r2, s2 = c2.rank.value, c2.suit.value
+
+            if r1 in ranks and r2 in ranks:
+                if ranks.index(r1) < ranks.index(r2):
+                    r1, r2 = r2, r1
+
+                if r1 == r2:
+                    hand_code = f"{r1}{r2}"
+                elif s1 == s2:
+                    hand_code = f"{r1}{r2}s"
+                else:
+                    hand_code = f"{r1}{r2}o"
+
+                num_players = (
+                    len(state.players)
+                    if state.players
+                    else max(2, state.num_active_players)
+                )
+                position = self._get_hero_position(state.dealer_seat, state.hero_seat, num_players)
+
+                chart_action_type = get_preflop_action(num_players, position, hand_code)
+
+                # Default logic when hand is not in chart
+                if chart_action_type is None and to_call == 0:
+                    chart_action_type = ActionType.CHECK
+                elif chart_action_type is None and to_call > 0:
+                    chart_action_type = ActionType.FOLD
+
         pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
         spr = state.spr
         effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
@@ -134,7 +174,7 @@ class PolicyEngine:
         # ── Score all actions
         style_adj = self.STYLE_ADJUSTMENTS[self.play_style]
         actions = self._score_actions(
-            equity, pot_odds, hand_strength, spr, to_call, state, style_adj
+            equity, pot_odds, hand_strength, spr, to_call, state, style_adj, chart_action_type
         )
 
         # ── Build confidence report
@@ -175,6 +215,7 @@ class PolicyEngine:
         to_call: float,
         state: TableState,
         style_adj: float,
+        chart_action_type: ActionType | None = None,
     ) -> list[Action]:
         """Score all possible actions based on poker math."""
         actions: list[Action] = []
@@ -241,6 +282,13 @@ class PolicyEngine:
                 score=all_in_score,
                 ev=all_in_ev,
             ))
+
+
+        # ── Apply Preflop Chart Boost
+        if chart_action_type:
+            for action in actions:
+                if action.action_type == chart_action_type:
+                    action.score += 10.0  # Ensure chart action is prioritized
 
         return actions
 
@@ -354,6 +402,30 @@ class PolicyEngine:
             is_uncertain=True,
             street=street,
         )
+
+
+    @staticmethod
+    def _get_hero_position(dealer_seat: int, hero_seat: int, num_players: int) -> str:
+        if num_players <= 2:
+            return "BTN" if (hero_seat == dealer_seat) else "BB"
+
+        if dealer_seat < 0 or hero_seat < 0:
+            return "UTG"  # Fallback
+
+        offset = (hero_seat - dealer_seat) % num_players
+
+        if offset == 0:
+            return "BTN"
+        elif offset == 1:
+            return "SB"
+        elif offset == 2:
+            return "BB"
+        elif offset == num_players - 1:
+            return "CO"
+        elif offset == num_players - 2 or offset == num_players - 3 and num_players >= 8:
+            return "MP"
+        else:
+            return "UTG"
 
     @staticmethod
     def _compute_recommendation_confidence(
