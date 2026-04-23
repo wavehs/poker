@@ -152,6 +152,16 @@ class Card(BaseModel):
         return self.code
 
 
+class OpponentProfile(BaseModel):
+    """Per-session statistics for an opponent."""
+    vpip: float = Field(default=0.0, ge=0.0, le=1.0, description="Voluntarily Put In Pot percentage")
+    pfr: float = Field(default=0.0, ge=0.0, le=1.0, description="Preflop Raise percentage")
+    af: float = Field(default=0.0, ge=0.0, description="Aggression Factor: (Bet + Raise) / Call")
+    three_bet_pct: float = Field(default=0.0, ge=0.0, le=1.0, description="3-bet percentage")
+    fold_to_cbet_pct: float = Field(default=0.0, ge=0.0, le=1.0, description="Fold to continuation bet percentage")
+    hands_played: int = Field(default=0, ge=0, description="Number of hands played")
+
+
 class PlayerState(BaseModel):
     """State of a single player at the table."""
     seat: int = Field(..., ge=0, le=9, description="Seat index 0-9")
@@ -165,6 +175,7 @@ class PlayerState(BaseModel):
     hole_cards: list[Card] = Field(default_factory=list, max_length=2)
     has_acted: bool = Field(default=False)
     last_action: ActionType | None = None
+    profile: OpponentProfile | None = Field(default=None, description="Opponent tracking profile if available")
 
 
 class TableState(BaseModel):

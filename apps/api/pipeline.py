@@ -23,6 +23,7 @@ from services.explainer.explainer import Explainer
 from services.ocr_core.ocr import OCREngine
 from services.policy_layer.policy import PolicyEngine
 from services.state_engine.engine import StateEngine
+from services.opponent_tracker.tracker import OpponentTracker
 from services.vision_core.detector import VisionDetector
 from services.vision_core.tracker import ObjectTracker
 
@@ -44,6 +45,7 @@ class Pipeline:
         policy: PolicyEngine | None = None,
         explainer: Explainer | None = None,
         tracker: ObjectTracker | None = None,
+        opponent_tracker: OpponentTracker | None = None,
         enable_profiling: bool = False,
     ) -> None:
         self.capture = capture or CaptureAgent()
@@ -53,6 +55,7 @@ class Pipeline:
         self.policy = policy or PolicyEngine()
         self.explainer = explainer or Explainer()
         self.tracker = tracker  # None = no tracking
+        self.opponent_tracker = opponent_tracker or OpponentTracker()
         self.profiler = PipelineProfiler() if enable_profiling else None
 
     def analyze_frame(
@@ -107,6 +110,10 @@ class Pipeline:
 
         # Use tracker-provided objects if available, else state engine's
         final_tracked = tracked_objects if self.tracker else state_tracked
+
+        # ── Step 4.5: Update opponent tracking
+        # This attaches the profile to players in table_state
+        self.opponent_tracker.update(table_state)
 
         # ── Step 5: Compute confidence scores
         vision_conf = (

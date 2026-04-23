@@ -133,6 +133,22 @@ class PolicyEngine:
 
         # ── Score all actions
         style_adj = self.STYLE_ADJUSTMENTS[self.play_style]
+
+        # Adjust style based on opponent profiles
+        # Performance impact: Minimal overhead. Iterating over max 9 players is O(1) conceptually.
+        # This allows hero to adjust to exploit table dynamics.
+        active_opponents = [p for p in state.players if not p.is_hero and p.is_active and p.profile is not None]
+        if active_opponents:
+            avg_vpip = sum(p.profile.vpip for p in active_opponents if p.profile is not None) / len(active_opponents)
+            avg_af = sum(p.profile.af for p in active_opponents if p.profile is not None) / len(active_opponents)
+
+            # If opponents are very loose and aggressive, tighten up slightly
+            if avg_vpip > 0.4 or avg_af > 2.0:
+                style_adj += 0.05
+            # If opponents are very tight, loosen up slightly
+            elif avg_vpip < 0.15:
+                style_adj -= 0.05
+
         actions = self._score_actions(
             equity, pot_odds, hand_strength, spr, to_call, state, style_adj
         )
