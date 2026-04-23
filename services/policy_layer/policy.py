@@ -19,6 +19,7 @@ from libs.common.schemas import (
     TableState,
 )
 from services.solver_core.solver import EquitySolver
+from services.policy_layer.range_models import estimate_opponent_range, range_to_cards
 
 
 class PolicyEngine:
@@ -98,12 +99,17 @@ class PolicyEngine:
                 state.street,
             )
 
+        # ── Compute opponent range
+        estimated_range_set = estimate_opponent_range(state, self.play_style)
+        estimated_range_cards = range_to_cards(estimated_range_set)
+
         # ── Compute core metrics
         num_opponents = max(1, state.num_active_players - 1)
 
-        equity = self.solver.compute_equity(
+        equity = self.solver.compute_equity_vs_range(
             hero.hole_cards,
             state.community_cards,
+            opponent_range_cards=estimated_range_cards,
             num_opponents=num_opponents,
             simulations=self.simulations,
         )
@@ -160,6 +166,7 @@ class PolicyEngine:
             pot_odds=pot_odds,
             spr=spr,
             effective_stack_bb=effective_stack_bb,
+            estimated_range=list(estimated_range_set),
             confidence=confidence,
             play_style=self.play_style,
             is_uncertain=confidence.is_dangerous,
@@ -307,6 +314,11 @@ class PolicyEngine:
 
         rec_conf = self._compute_recommendation_confidence(equity, hand_strength, state_conf)
 
+        # Generate the estimated range again since we aren't passing it down,
+        # or we could just use the fact that it's short-stack Preflop Push/Fold scenario.
+        # It's better to log the same range. We can quickly recompute it for the recommendation.
+        estimated_range_set = estimate_opponent_range(state, self.play_style)
+
         return Recommendation(
             best_action=best,
             all_actions=[best],
@@ -315,6 +327,7 @@ class PolicyEngine:
             pot_odds=pot_odds,
             spr=spr,
             effective_stack_bb=effective_stack_bb,
+            estimated_range=list(estimated_range_set),
             confidence=ConfidenceReport(
                 vision_confidence=vision_conf,
                 ocr_confidence=ocr_conf,

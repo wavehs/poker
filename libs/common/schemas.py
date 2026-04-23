@@ -278,6 +278,7 @@ class Recommendation(BaseModel):
     pot_odds: float = Field(default=0.0, ge=0.0, description="Pot odds ratio")
     spr: float = Field(default=0.0, ge=0.0, description="Stack-to-pot ratio")
     effective_stack_bb: float = Field(default=0.0, ge=0.0, description="Effective stack in BBs")
+    estimated_range: list[str] = Field(default_factory=list, description="Opponent estimated range")
     confidence: ConfidenceReport = Field(default_factory=ConfidenceReport)
     explanation: str = Field(default="", description="Human-readable explanation")
     play_style: PlayStyle = Field(default=PlayStyle.BALANCED)
