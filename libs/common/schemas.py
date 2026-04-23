@@ -223,6 +223,15 @@ class TableState(BaseModel):
 # ─── Recommendation Layer ────────────────────────────────────────────────────
 
 
+class ActionEvent(BaseModel):
+    """An action that was captured by the agent."""
+    action_type: ActionType
+    amount: float = Field(default=0.0, ge=0.0, description="Bet/raise amount if applicable")
+    timestamp_ms: float = Field(default=0.0, description="Timestamp when the action was captured")
+    time_to_act_ms: float = Field(default=0.0, description="Time taken to act in ms")
+    bet_sizing_ratio: float = Field(default=0.0, description="Bet amount divided by pot size")
+
+
 class Action(BaseModel):
     """A possible action with computed score."""
     action_type: ActionType
