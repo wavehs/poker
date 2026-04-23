@@ -152,6 +152,18 @@ class Card(BaseModel):
         return self.code
 
 
+class OpponentProfile(BaseModel):
+    """Statistical profile of an opponent."""
+    seat_id: int
+    hands_seen: int = Field(default=0, ge=0)
+    vpip: float = Field(default=0.0, ge=0.0, le=1.0)
+    pfr: float = Field(default=0.0, ge=0.0, le=1.0)
+    af: float = Field(default=0.0, ge=0.0)
+    fold_to_cbet: float = Field(default=0.0, ge=0.0, le=1.0)
+    sizing_tells: dict[Street, float] = Field(default_factory=dict)
+    sample_size: int = Field(default=0, ge=0)
+
+
 class PlayerState(BaseModel):
     """State of a single player at the table."""
     seat: int = Field(..., ge=0, le=9, description="Seat index 0-9")
