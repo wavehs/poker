@@ -1,11 +1,16 @@
 """Tests for State Engine."""
 
-import numpy as np
 
-from libs.common.schemas import DetectionClass, Street
+from libs.common.schemas import (
+    BoundingBox,
+    Detection,
+    DetectionClass,
+    OCRResult,
+    Street,
+)
+from services.ocr_core.ocr import OCREngine
 from services.state_engine.engine import StateEngine, parse_card
 from services.vision_core.detector import VisionDetector
-from services.ocr_core.ocr import OCREngine
 
 
 class TestParseCard:
@@ -69,3 +74,28 @@ class TestStateEngine:
 
         # History should be trimmed to window size
         assert len(engine._frame_history) == 3
+
+    def test_extract_pot_error_handling(self):
+        engine = StateEngine()
+        bbox = BoundingBox(x=0, y=0, w=10, h=10, confidence=0.9)
+
+        # 1. Test OCR ValueError
+        ocr_results = [
+            OCRResult(text="not-a-number", confidence=0.9, bbox=bbox, field_type="pot"),
+            OCRResult(text="123.45", confidence=0.9, bbox=bbox, field_type="pot"),
+        ]
+        # Should skip "not-a-number" and return 123.45
+        assert engine._extract_pot([], ocr_results) == 123.45
+
+        # 2. Test Detection ValueError
+        detections = [
+            Detection(detection_class=DetectionClass.POT, bbox=bbox, label="invalid"),
+            Detection(detection_class=DetectionClass.POT, bbox=bbox, label="500.0"),
+        ]
+        # Should skip "invalid" and return 500.0
+        assert engine._extract_pot(detections, []) == 500.0
+
+        # 3. Test both invalid
+        ocr_results = [OCRResult(text="err", confidence=0.8, bbox=bbox, field_type="pot")]
+        detections = [Detection(detection_class=DetectionClass.POT, bbox=bbox, label="bad")]
+        assert engine._extract_pot(detections, ocr_results) == 0.0
