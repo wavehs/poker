@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import pytest
 
+from libs.common.schemas import ActionType
 from services.capture_agent.capture import CaptureAgent, CaptureMetrics
 
 # ─── CaptureMetrics ─────────────────────────────────────────────────────────
@@ -99,6 +100,54 @@ class TestCaptureAgentFileMode:
         elapsed = time.perf_counter() - t0
         assert elapsed >= 0.15  # Allow some slack
         assert len(frames) >= 1
+
+    def test_action_timing_capture(self):
+        agent = CaptureAgent(source="file")
+        agent.mark_action_prompt(1000.0)
+
+        event = agent.capture_action_event(
+            action_type=ActionType.RAISE,
+            bet_amount=50.0,
+            pot_size=100.0,
+            timestamp_ms=1500.0,
+        )
+
+        assert event.action_type == ActionType.RAISE
+        assert event.amount == 50.0
+        assert event.timestamp_ms == 1500.0
+        assert event.time_to_act_ms == 500.0
+        assert event.bet_sizing_ratio == 0.5
+
+        # Test reset after capture
+        assert agent._action_prompt_timestamp is None
+
+        # Test no prompt
+        event2 = agent.capture_action_event(
+            action_type=ActionType.FOLD,
+            bet_amount=0.0,
+            pot_size=100.0,
+            timestamp_ms=2000.0,
+        )
+        assert event2.time_to_act_ms == 0.0
+
+        # Test divide by zero protection
+        event3 = agent.capture_action_event(
+            action_type=ActionType.BET,
+            bet_amount=10.0,
+            pot_size=0.0,
+            timestamp_ms=2500.0,
+        )
+        assert event3.bet_sizing_ratio == 0.0
+
+        # Test negative time-to-act protection
+        agent.mark_action_prompt(3000.0)
+        event4 = agent.capture_action_event(
+            action_type=ActionType.CHECK,
+            bet_amount=0.0,
+            pot_size=100.0,
+            timestamp_ms=2500.0,
+        )
+        assert event4.time_to_act_ms == 0.0
 
 
 # ─── CaptureAgent — Load from file ──────────────────────────────────────────

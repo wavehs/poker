@@ -16,6 +16,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from libs.common.schemas import ActionType, ActionEvent
+
 logger = logging.getLogger(__name__)
 
 
@@ -137,6 +139,7 @@ class CaptureAgent:
         self.fps_target = fps_target
         self._frame_idx = 0
         self.metrics = CaptureMetrics()
+        self._action_prompt_timestamp: float | None = None
 
         # Resolve backend
         self._backend = self._resolve_backend(source)
@@ -179,6 +182,43 @@ class CaptureAgent:
     def backend(self) -> str:
         """Currently active backend name."""
         return self._backend
+
+    # ─── Action Timing ───────────────────────────────────────────────────
+
+    def mark_action_prompt(self, timestamp_ms: float) -> None:
+        """
+        Record the timestamp when the action prompt appeared.
+        """
+        self._action_prompt_timestamp = timestamp_ms
+
+    def capture_action_event(
+        self,
+        action_type: ActionType,
+        bet_amount: float,
+        pot_size: float,
+        timestamp_ms: float,
+    ) -> ActionEvent:
+        """
+        Capture an action event, computing timing and bet sizing.
+        """
+        time_to_act_ms = 0.0
+        if self._action_prompt_timestamp is not None:
+            time_to_act_ms = timestamp_ms - self._action_prompt_timestamp
+            self._action_prompt_timestamp = None  # Reset after capture
+            if time_to_act_ms < 0:
+                time_to_act_ms = 0.0
+
+        bet_sizing_ratio = 0.0
+        if pot_size > 0:
+            bet_sizing_ratio = bet_amount / pot_size
+
+        return ActionEvent(
+            action_type=action_type,
+            amount=bet_amount,
+            timestamp_ms=timestamp_ms,
+            time_to_act_ms=time_to_act_ms,
+            bet_sizing_ratio=bet_sizing_ratio,
+        )
 
     # ─── Context manager ─────────────────────────────────────────────────
 
