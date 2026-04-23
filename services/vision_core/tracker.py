@@ -80,7 +80,7 @@ class ObjectTracker:
         t0 = time.perf_counter()
 
         # Simple IoU-based matching
-        matched = self._match_detections(detections)
+        matched, unmatched = self._match_detections(detections)
 
         # Update matched tracks
         for track_id, det in matched:
@@ -90,12 +90,10 @@ class ObjectTracker:
                 self._tracks[track_id] = _TrackState(track_id, det, frame_idx)
 
         # Create new tracks for unmatched detections
-        matched_dets = {id(det) for _, det in matched}
-        for det in detections:
-            if id(det) not in matched_dets:
-                tid = self._next_track_id
-                self._next_track_id += 1
-                self._tracks[tid] = _TrackState(tid, det, frame_idx)
+        for det in unmatched:
+            tid = self._next_track_id
+            self._next_track_id += 1
+            self._tracks[tid] = _TrackState(tid, det, frame_idx)
 
         # Remove stale tracks
         stale = [
@@ -119,14 +117,14 @@ class ObjectTracker:
 
     def _match_detections(
         self, detections: list[Detection]
-    ) -> list[tuple[int, Detection]]:
+    ) -> tuple[list[tuple[int, Detection]], list[Detection]]:
         """Match new detections to existing tracks via IoU."""
         if not self._tracks or not detections:
-            return []
+            return [], detections
 
         matched: list[tuple[int, Detection]] = []
         used_tracks: set[int] = set()
-        used_dets: set[int] = set()
+        used_det_indices: set[int] = set()
 
         # Compute IoU matrix
         track_list = [(tid, ts) for tid, ts in self._tracks.items()]
@@ -149,9 +147,14 @@ class ObjectTracker:
             if best_track_id >= 0:
                 matched.append((best_track_id, det))
                 used_tracks.add(best_track_id)
-                used_dets.add(det_idx)
+                used_det_indices.add(det_idx)
 
-        return matched
+        unmatched = [
+            det for i, det in enumerate(detections)
+            if i not in used_det_indices
+        ]
+
+        return matched, unmatched
 
     def _build_tracked_objects(self) -> list[TrackedObject]:
         """Convert internal track states to TrackedObject schema."""
