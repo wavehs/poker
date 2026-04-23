@@ -78,6 +78,10 @@ const dom = {
     confStateVal: $('#conf-state-val'),
     confRec: $('#conf-rec'),
     confRecVal: $('#conf-rec-val'),
+    potOddsIndicator: $('#pot-odds-indicator'),
+    potOddsStatus: $('#pot-odds-status'),
+    potOddsFill: $('#pot-odds-fill'),
+    potOddsMarker: $('#pot-odds-marker'),
 };
 
 // ─── API ───────────────────────────────────────────────────────────────────
@@ -158,6 +162,9 @@ function updateUI(analysis) {
     dom.effStack.textContent = `${rec.effective_stack_bb.toFixed(0)}BB`;
     dom.potSize.textContent = ts.pot.toFixed(0);
 
+    // ── Pot Odds Indicator
+    updatePotOddsIndicator(analysis);
+
     // ── All actions
     updateActionsList(rec.all_actions);
 
@@ -202,6 +209,45 @@ function updateBestAction(rec) {
     html += `<span class="recommendation__action-score">Score: ${action.score.toFixed(2)} | EV: ${action.ev >= 0 ? '+' : ''}${action.ev.toFixed(1)}</span>`;
 
     actionEl.innerHTML = html;
+}
+
+function updatePotOddsIndicator(analysis) {
+    const rec = analysis.recommendation;
+
+    // As per requirement, look in solver_result first if it exists, fallback to recommendation
+    const potOdds = analysis.solver_result?.pot_odds ?? rec.pot_odds;
+    const equity = analysis.solver_result?.equity ?? rec.equity;
+
+    if (potOdds == null || equity == null) {
+        dom.potOddsIndicator.style.display = 'none';
+        return;
+    }
+
+    // Only show if there's an actual decision to make involving pot odds (> 0)
+    if (potOdds > 0) {
+        dom.potOddsIndicator.style.display = 'block';
+    } else {
+        dom.potOddsIndicator.style.display = 'none';
+        return;
+    }
+
+    const equityPct = Math.round(equity * 100);
+    const potOddsPct = Math.round(potOdds * 100);
+
+    dom.potOddsFill.style.width = `${equityPct}%`;
+    dom.potOddsMarker.style.left = `${potOddsPct}%`;
+
+    const isProfitable = equity >= potOdds;
+
+    if (isProfitable) {
+        dom.potOddsStatus.textContent = `Profitable Call (${equityPct}% >= ${potOddsPct}%)`;
+        dom.potOddsStatus.className = 'pot-odds-indicator__status pot-odds-indicator__status--profitable';
+        dom.potOddsFill.className = 'pot-odds-indicator__fill pot-odds-indicator__fill--profitable';
+    } else {
+        dom.potOddsStatus.textContent = `Unprofitable (${equityPct}% < ${potOddsPct}%)`;
+        dom.potOddsStatus.className = 'pot-odds-indicator__status pot-odds-indicator__status--unprofitable';
+        dom.potOddsFill.className = 'pot-odds-indicator__fill pot-odds-indicator__fill--unprofitable';
+    }
 }
 
 function updateActionsList(actions) {
