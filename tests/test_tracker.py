@@ -1,11 +1,8 @@
 """Tests for Object Tracker."""
 
-import numpy as np
-import pytest
 
-from libs.common.schemas import BoundingBox, Detection, DetectionClass, TrackedObject
+from libs.common.schemas import BoundingBox, Detection, DetectionClass
 from services.vision_core.tracker import ObjectTracker, _compute_iou
-
 
 # ─── IoU ─────────────────────────────────────────────────────────────────────
 

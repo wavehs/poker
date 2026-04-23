@@ -1,15 +1,14 @@
 """Tests for Solver Core — hand evaluation and equity."""
 
-import pytest
 
 from libs.common.schemas import Card, Rank, Suit
+from services.solver_core.evaluator import BuiltinEvaluator
 from services.solver_core.solver import (
     EquitySolver,
     SolverProfile,
     evaluate_hand,
     rank_value,
 )
-from services.solver_core.evaluator import BuiltinEvaluator
 
 
 class TestRankValue:

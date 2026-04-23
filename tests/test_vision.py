@@ -1,13 +1,11 @@
 """Tests for Vision Core — detector, mock and YOLO adapter."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
-from libs.common.schemas import BoundingBox, Detection, DetectionClass
-from services.vision_core.detector import VisionDetector, _YOLO_INDEX_TO_CLASS
-
+from libs.common.schemas import DetectionClass
+from services.vision_core.detector import _YOLO_INDEX_TO_CLASS, VisionDetector
 
 # ─── Mock mode ───────────────────────────────────────────────────────────────
 

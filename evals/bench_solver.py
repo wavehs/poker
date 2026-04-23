@@ -23,7 +23,6 @@ from libs.common.schemas import Card, Rank, Suit
 from services.solver_core.evaluator import BuiltinEvaluator, HandEvaluator
 from services.solver_core.solver import EquitySolver
 
-
 # ─── Test Data ───────────────────────────────────────────────────────────────
 
 
@@ -118,7 +117,7 @@ def bench_equity_by_evaluator(simulations: int = 2000) -> None:
 def bench_adaptive_vs_fixed() -> None:
     """Compare adaptive vs fixed Monte Carlo."""
     print(f"\n{'='*70}")
-    print(f"  BENCHMARK: Adaptive vs Fixed Monte Carlo")
+    print("  BENCHMARK: Adaptive vs Fixed Monte Carlo")
     print(f"{'='*70}")
 
     evaluators = _get_evaluators()
@@ -163,7 +162,7 @@ def bench_adaptive_vs_fixed() -> None:
 def bench_multi_opponent() -> None:
     """Benchmark with different opponent counts."""
     print(f"\n{'='*70}")
-    print(f"  BENCHMARK: Multi-opponent (1-5 opponents)")
+    print("  BENCHMARK: Multi-opponent (1-5 opponents)")
     print(f"{'='*70}")
 
     evaluators = _get_evaluators()
@@ -190,7 +189,7 @@ def bench_multi_opponent() -> None:
 def bench_latency_target() -> None:
     """Test: can we hit <500ms for all scenarios with best evaluator?"""
     print(f"\n{'='*70}")
-    print(f"  LATENCY TARGET: <500ms per recommendation")
+    print("  LATENCY TARGET: <500ms per recommendation")
     print(f"{'='*70}")
 
     evaluators = _get_evaluators()

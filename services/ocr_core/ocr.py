@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -98,7 +97,7 @@ class OCREngine:
         frame: np.ndarray,
         bbox: BoundingBox,
         field_type: str = "generic",
-    ) -> Optional[OCRResult]:
+    ) -> OCRResult | None:
         """
         Run OCR on a specific region.
 
@@ -122,7 +121,7 @@ class OCREngine:
 
     # ─── Real OCR ────────────────────────────────────────────────────────
 
-    def _real_ocr(self, frame: np.ndarray, detection: Detection) -> Optional[OCRResult]:
+    def _real_ocr(self, frame: np.ndarray, detection: Detection) -> OCRResult | None:
         """Real OCR on a detection region."""
         bbox = detection.bbox
 
@@ -177,7 +176,7 @@ class OCREngine:
         frame: np.ndarray,
         bbox: BoundingBox,
         field_type: str,
-    ) -> Optional[OCRResult]:
+    ) -> OCRResult | None:
         """Real OCR on an arbitrary region."""
         crop = crop_bbox(frame, bbox.x, bbox.y, bbox.w, bbox.h, padding=0.05)
         if crop.size < 10:
@@ -209,7 +208,7 @@ class OCREngine:
 
     # ─── Mock OCR (Phase 1 behavior) ─────────────────────────────────────
 
-    def _mock_ocr(self, detection: Detection) -> Optional[OCRResult]:
+    def _mock_ocr(self, detection: Detection) -> OCRResult | None:
         """
         Generate mock OCR result from detection label.
         """

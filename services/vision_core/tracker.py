@@ -10,12 +10,9 @@ from __future__ import annotations
 
 import logging
 import time
-from collections import Counter, defaultdict
-from typing import Optional
+from collections import Counter
 
-import numpy as np
-
-from libs.common.schemas import Detection, DetectionClass, TrackedObject
+from libs.common.schemas import Detection, TrackedObject
 
 logger = logging.getLogger(__name__)
 

@@ -8,10 +8,8 @@ Confidence scoring is a first-class citizen at every layer.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ─── Enumerations ────────────────────────────────────────────────────────────
 
@@ -166,7 +164,7 @@ class PlayerState(BaseModel):
     is_hero: bool = Field(default=False, description="True if this is the user's seat")
     hole_cards: list[Card] = Field(default_factory=list, max_length=2)
     has_acted: bool = Field(default=False)
-    last_action: Optional[ActionType] = None
+    last_action: ActionType | None = None
 
 
 class TableState(BaseModel):
@@ -196,7 +194,7 @@ class TableState(BaseModel):
     is_hand_in_progress: bool = Field(default=False)
 
     @property
-    def hero(self) -> Optional[PlayerState]:
+    def hero(self) -> PlayerState | None:
         """Get the hero player, if identified."""
         for p in self.players:
             if p.is_hero:

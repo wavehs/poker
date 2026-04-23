@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import itertools
 import logging
-from collections import Counter
 from typing import Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
@@ -232,7 +231,8 @@ class TreysEvaluator:
     """
 
     def __init__(self) -> None:
-        from treys import Evaluator as _TreysEval, Card as _TreysCard
+        from treys import Card as _TreysCard
+        from treys import Evaluator as _TreysEval
         self._evaluator = _TreysEval()
         self._treys_card = _TreysCard
         # Pre-build card lookup table: int(0-51) -> treys int card
