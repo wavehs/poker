@@ -15,7 +15,7 @@ import numpy as np
 
 from libs.common.schemas import BoundingBox, Detection, DetectionClass, OCRResult
 from services.ocr_core.backends import OCRBackend, create_backend
-from services.ocr_core.preprocess import crop_bbox, preprocess_for_ocr
+from services.ocr_core.preprocess import crop_bbox, preprocess_fallback, preprocess_for_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -121,43 +121,52 @@ class OCREngine:
 
     # ─── Real OCR ────────────────────────────────────────────────────────
 
-    def _real_ocr(self, frame: np.ndarray, detection: Detection) -> OCRResult | None:
-        """Real OCR on a detection region."""
-        bbox = detection.bbox
-
-        # Crop region from frame
-        crop = crop_bbox(frame, bbox.x, bbox.y, bbox.w, bbox.h, padding=0.1)
-        if crop.size < 10:
-            return None
-
-        # Determine field type
-        field_type = self._field_type_from_detection(detection)
-
-        # Preprocess
+    def _run_ocr_pipeline(
+        self, crop: np.ndarray, field_type: str, bbox: BoundingBox
+    ) -> OCRResult | None:
+        """Helper to run the OCR pipeline with fallback and validation."""
         processed = preprocess_for_ocr(crop, field_type=field_type)
 
-        # Run OCR backend
         t0 = time.perf_counter()
         raw_results = self._backend_impl.recognize(processed)
         latency_ms = (time.perf_counter() - t0) * 1000
 
         if not raw_results:
-            # Fallback: try with original crop (no preprocessing)
             raw_results = self._backend_impl.recognize(crop)
 
-        if not raw_results:
-            return None
+        best_text = ""
+        best_conf = 0.0
+        if raw_results:
+            best_text, best_conf, _ = max(raw_results, key=lambda r: r[1])
+            best_text = best_text.strip()
 
-        # Take best result
-        best_text, best_conf, _ = max(raw_results, key=lambda r: r[1])
-        best_text = best_text.strip()
+        # Fallback for low confidence
+        if best_conf < 0.7:
+            fallback_processed = preprocess_fallback(crop)
+            fallback_results = self._backend_impl.recognize(fallback_processed)
+            if fallback_results:
+                fb_text, fb_conf, _ = max(fallback_results, key=lambda r: r[1])
+                fb_text = fb_text.strip()
+                if fb_conf > best_conf:
+                    best_text = fb_text
+                    best_conf = fb_conf
+                    logger.debug("OCR fallback used for [%s]: conf improved to %.2f", field_type, fb_conf)
 
         if not best_text:
             return None
 
-        # Clean numeric text
         if field_type in ("pot", "stack", "bet", "blind"):
             best_text = self._clean_numeric(best_text)
+
+            # Validation
+            try:
+                val = float(best_text)
+                if not (0 <= val <= 1000000):
+                    logger.warning("OCR validation failed: [%s] value %s out of bounds", field_type, best_text)
+                    return None
+            except ValueError:
+                logger.warning("OCR validation failed: [%s] value '%s' is not numeric", field_type, best_text)
+                return None
 
         confidence = min(1.0, best_conf + self.confidence_boost)
 
@@ -171,6 +180,16 @@ class OCREngine:
             field_type=field_type,
         )
 
+    def _real_ocr(self, frame: np.ndarray, detection: Detection) -> OCRResult | None:
+        """Real OCR on a detection region."""
+        bbox = detection.bbox
+        crop = crop_bbox(frame, bbox.x, bbox.y, bbox.w, bbox.h, padding=0.1)
+        if crop.size < 10:
+            return None
+
+        field_type = self._field_type_from_detection(detection)
+        return self._run_ocr_pipeline(crop, field_type, bbox)
+
     def _real_ocr_region(
         self,
         frame: np.ndarray,
@@ -182,29 +201,7 @@ class OCREngine:
         if crop.size < 10:
             return None
 
-        processed = preprocess_for_ocr(crop, field_type=field_type)
-        raw_results = self._backend_impl.recognize(processed)
-
-        if not raw_results:
-            raw_results = self._backend_impl.recognize(crop)
-
-        if not raw_results:
-            return None
-
-        best_text, best_conf, _ = max(raw_results, key=lambda r: r[1])
-        best_text = best_text.strip()
-        if not best_text:
-            return None
-
-        if field_type in ("pot", "stack", "bet", "blind"):
-            best_text = self._clean_numeric(best_text)
-
-        return OCRResult(
-            text=best_text,
-            confidence=min(1.0, best_conf + self.confidence_boost),
-            bbox=bbox,
-            field_type=field_type,
-        )
+        return self._run_ocr_pipeline(crop, field_type, bbox)
 
     # ─── Mock OCR (Phase 1 behavior) ─────────────────────────────────────
 
