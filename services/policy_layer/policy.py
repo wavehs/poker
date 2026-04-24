@@ -167,7 +167,7 @@ class PolicyEngine:
                     chart_action_type = ActionType.FOLD
 
         pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
-        spr = state.spr
+        spr = self.solver.compute_spr(state.effective_stack, state.pot)
         effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
 
         # ── Check for short stack push/fold
@@ -214,6 +214,8 @@ class PolicyEngine:
         actions.sort(key=lambda a: a.score, reverse=True)
         best = actions[0] if actions else Action(action_type=ActionType.UNCERTAIN)
 
+        explanation = self._get_spr_advice(spr)
+
         return Recommendation(
             best_action=best,
             all_actions=actions,
@@ -224,10 +226,24 @@ class PolicyEngine:
             effective_stack_bb=effective_stack_bb,
             estimated_range=list(estimated_range_set),
             confidence=confidence,
+            explanation=explanation,
             play_style=self.play_style,
             is_uncertain=confidence.is_dangerous,
             street=state.street,
         )
+
+    def _get_spr_advice(self, spr: float) -> str:
+        """Get textual advice based on SPR thresholds."""
+        if spr < 1:
+            return "SPR < 1: Автоматическое выставление (Commitment). Банк привязан, готовы к олл-ину."
+        elif spr < 4:
+            return "SPR < 4: Низкий SPR. Идеально для топ-пар и оверпар."
+        elif spr < 10:
+            return "SPR < 10: Средний SPR. Пространство для маневра, подходят сильные дро и две пары."
+        elif spr < 20:
+            return "SPR < 20: Высокий SPR. Ценятся спекулятивные руки (сет-майнинг, одномастные коннекторы)."
+        else:
+            return "SPR >= 20: Глубокие стеки. Играем от потенциальных оддсов (Implied odds)."
 
     def _score_actions(
         self,
@@ -383,6 +399,9 @@ class PolicyEngine:
         # It's better to log the same range. We can quickly recompute it for the recommendation.
         estimated_range_set = estimate_opponent_range(state, self.play_style)
 
+        spr_advice = self._get_spr_advice(spr)
+        full_explanation = explanation + " " + spr_advice if explanation else spr_advice
+
         return Recommendation(
             best_action=best,
             all_actions=[best],
@@ -398,7 +417,7 @@ class PolicyEngine:
                 state_confidence=state_conf,
                 recommendation_confidence=rec_conf,
             ),
-            explanation=explanation,
+            explanation=full_explanation,
             play_style=self.play_style,
             is_uncertain=False,
             street=state.street,
