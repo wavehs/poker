@@ -295,6 +295,35 @@ class EquitySolver:
         simulations: int | None = None,
     ) -> float:
         """
+        Estimate equity vs random hands via Monte Carlo simulation.
+
+        Args:
+            hole_cards: Hero's 2 hole cards.
+            community_cards: 0-5 community cards.
+            num_opponents: Number of opponents.
+            simulations: Override default simulation count.
+
+        Returns:
+            Equity as float [0, 1].
+        """
+        # Call the range-based method with a None range to fall back to random cards
+        return self.compute_equity_vs_range(
+            hole_cards=hole_cards,
+            community_cards=community_cards,
+            opponent_range_cards=None,
+            num_opponents=num_opponents,
+            simulations=simulations,
+        )
+
+    def compute_equity_vs_range(
+        self,
+        hole_cards: list[Card],
+        community_cards: list[Card],
+        opponent_range_cards: list[tuple[int, int]] | None = None,
+        num_opponents: int = 1,
+        simulations: int | None = None,
+    ) -> float:
+        """
         Estimate equity via Monte Carlo simulation.
 
         Args:
@@ -330,10 +359,29 @@ class EquitySolver:
         deck = [c for c in self._full_deck if c not in known]
         profile.deck_build_ms = (time.perf_counter() - t_deck) * 1000
 
+        # Pre-filter range cards to exclude combinations conflicting with known cards
+        valid_range_cards = None
+        if opponent_range_cards is not None:
+            valid_range_cards = []
+            for combo in opponent_range_cards:
+                if combo[0] not in known and combo[1] not in known:
+                    valid_range_cards.append(combo)
+
+            # If after filtering the range is empty, fallback to random
+            if not valid_range_cards:
+                valid_range_cards = None
+
         # ── Run Monte Carlo
         t_sim = time.perf_counter()
         cards_needed = 5 - len(board_ints)
-        cards_per_sim = cards_needed + num_opponents * 2
+
+        # When picking random hands, we need cards for the board + opponent hands
+        # When using range, we draw the opponent hand separately, so we just need board cards + cards for any *other* random opponents
+        random_cards_needed = cards_needed
+        if valid_range_cards is None:
+            random_cards_needed += num_opponents * 2
+        else:
+            random_cards_needed += max(0, num_opponents - 1) * 2
 
         wins = 0
         ties = 0
@@ -347,12 +395,41 @@ class EquitySolver:
             batch_end = min(batch_start + self.step_size, sims)
 
             for _ in range(batch_start, batch_end):
-                sampled_deck = random.sample(deck, cards_per_sim)
+                if valid_range_cards:
+                    opp_hand = random.choice(valid_range_cards)
+                    # Fast check to avoid full list comprehension if we don't have enough cards anyway
+                    if len(deck) - 2 < random_cards_needed:
+                        continue
 
-                result = self._simulate_once_int(
-                    hero_ints, board_ints, sampled_deck, num_opponents,
-                    cards_needed, profile,
-                )
+                    # Instead of creating current_deck every loop, sample and then filter.
+                    # This is slightly faster on average if random_cards_needed is small.
+                    # Or we can just resample if we hit one of the 2 opponent cards.
+                    sampled_deck = []
+                    while len(sampled_deck) < random_cards_needed:
+                        s = random.choice(deck)
+                        if s not in opp_hand and s not in sampled_deck:
+                            sampled_deck.append(s)
+
+                    # Inject the opponent hand to the front of sampled_deck to match the signature expectation
+                    # where opponents are drawn from the deck sequentially
+                    # But since cards_needed comes before opponents in _simulate_once_int... wait. Let's look at _simulate_once_int
+                    # Actually _simulate_once_int draws cards_needed first for the board, then 2 for each opponent.
+                    board_samples = sampled_deck[:cards_needed]
+                    other_opp_samples = sampled_deck[cards_needed:]
+
+                    # Construct a deck that _simulate_once_int expects: board_cards + opp1_cards + opp2_cards...
+                    custom_deck = board_samples + list(opp_hand) + other_opp_samples
+
+                    result = self._simulate_once_int(
+                        hero_ints, board_ints, custom_deck, num_opponents,
+                        cards_needed, profile,
+                    )
+                else:
+                    sampled_deck = random.sample(deck, random_cards_needed)
+                    result = self._simulate_once_int(
+                        hero_ints, board_ints, sampled_deck, num_opponents,
+                        cards_needed, profile,
+                    )
                 if result > 0:
                     wins += 1
                 elif result == 0:
@@ -467,6 +544,21 @@ class EquitySolver:
         if pot + to_call <= 0:
             return 0.0
         return to_call / (pot + to_call)
+
+    def compute_spr(self, effective_stack: float, pot_size: float) -> float:
+        """
+        Compute stack-to-pot ratio (SPR).
+
+        Args:
+            effective_stack: The effective stack size.
+            pot_size: Current pot size.
+
+        Returns:
+            SPR as a float.
+        """
+        if pot_size <= 0:
+            return float("inf")
+        return effective_stack / pot_size
 
     def _build_deck(self, exclude: set[str]) -> list[Card]:
         """Build a deck of all cards minus excluded ones.

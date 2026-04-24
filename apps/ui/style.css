@@ -390,6 +390,75 @@ body::before {
     color: var(--text-primary);
 }
 
+/* ── Pot Odds Indicator ── */
+.pot-odds-indicator {
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    padding: 0.8rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--border);
+}
+
+.pot-odds-indicator__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.6rem;
+}
+
+.pot-odds-indicator__label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.pot-odds-indicator__status {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.pot-odds-indicator__status--profitable {
+    color: var(--accent-green);
+}
+
+.pot-odds-indicator__status--unprofitable {
+    color: var(--accent-red);
+}
+
+.pot-odds-indicator__track {
+    position: relative;
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pot-odds-indicator__fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width var(--transition-slow), background-color var(--transition-slow);
+}
+
+.pot-odds-indicator__fill--profitable {
+    background: linear-gradient(90deg, var(--accent-green), #34d399); /* Emerald green */
+}
+
+.pot-odds-indicator__fill--unprofitable {
+    background: linear-gradient(90deg, var(--accent-red), #f87171); /* Red */
+}
+
+.pot-odds-indicator__marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: white;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    transition: left var(--transition-slow);
+    z-index: 2;
+}
+
 /* ── Actions List ── */
 .recommendation__actions-list {
     display: flex;

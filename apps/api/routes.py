@@ -5,7 +5,9 @@ API Routes — /health, /analyze-frame, /analyze-sequence.
 from __future__ import annotations
 
 import base64
+import json
 import time
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -90,6 +92,30 @@ async def analyze_synthetic() -> FrameAnalysis:
     frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
     pipeline = get_pipeline()
     return pipeline.analyze_frame(frame, frame_idx=0)
+
+
+# ─── Session History ─────────────────────────────────────────────────────────
+
+@router.get("/api/v1/session/history")
+async def get_session_history() -> dict:
+    """
+    Retrieve the history of completed hands for the current session.
+    """
+    pipeline = get_pipeline()
+    if not hasattr(pipeline, "session_file") or not pipeline.session_file or not pipeline.session_file.exists():
+        return {"history": []}
+
+    history = []
+    try:
+        with open(pipeline.session_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    history.append(json.loads(line))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read session history: {e}")
+
+    return {"history": history}
 
 
 # ─── Analyze Sequence ────────────────────────────────────────────────────────

@@ -152,6 +152,16 @@ class Card(BaseModel):
         return self.code
 
 
+class OpponentProfile(BaseModel):
+    """Per-session statistics for an opponent."""
+    vpip: float = Field(default=0.0, ge=0.0, le=1.0, description="Voluntarily Put In Pot percentage")
+    pfr: float = Field(default=0.0, ge=0.0, le=1.0, description="Preflop Raise percentage")
+    af: float = Field(default=0.0, ge=0.0, description="Aggression Factor: (Bet + Raise) / Call")
+    three_bet_pct: float = Field(default=0.0, ge=0.0, le=1.0, description="3-bet percentage")
+    fold_to_cbet_pct: float = Field(default=0.0, ge=0.0, le=1.0, description="Fold to continuation bet percentage")
+    hands_played: int = Field(default=0, ge=0, description="Number of hands played")
+
+
 class PlayerState(BaseModel):
     """State of a single player at the table."""
     seat: int = Field(..., ge=0, le=9, description="Seat index 0-9")
@@ -165,6 +175,7 @@ class PlayerState(BaseModel):
     hole_cards: list[Card] = Field(default_factory=list, max_length=2)
     has_acted: bool = Field(default=False)
     last_action: ActionType | None = None
+    profile: OpponentProfile | None = Field(default=None, description="Opponent tracking profile if available")
 
 
 class TableState(BaseModel):
@@ -223,6 +234,15 @@ class TableState(BaseModel):
 # ─── Recommendation Layer ────────────────────────────────────────────────────
 
 
+class ActionEvent(BaseModel):
+    """An action that was captured by the agent."""
+    action_type: ActionType
+    amount: float = Field(default=0.0, ge=0.0, description="Bet/raise amount if applicable")
+    timestamp_ms: float = Field(default=0.0, description="Timestamp when the action was captured")
+    time_to_act_ms: float = Field(default=0.0, description="Time taken to act in ms")
+    bet_sizing_ratio: float = Field(default=0.0, description="Bet amount divided by pot size")
+
+
 class Action(BaseModel):
     """A possible action with computed score."""
     action_type: ActionType
@@ -277,7 +297,9 @@ class Recommendation(BaseModel):
     equity: float = Field(default=0.0, ge=0.0, le=1.0, description="Monte Carlo equity [0,1]")
     pot_odds: float = Field(default=0.0, ge=0.0, description="Pot odds ratio")
     spr: float = Field(default=0.0, ge=0.0, description="Stack-to-pot ratio")
+    spr_advice: str = Field(default="", description="SPR recommendation")
     effective_stack_bb: float = Field(default=0.0, ge=0.0, description="Effective stack in BBs")
+    estimated_range: list[str] = Field(default_factory=list, description="Opponent estimated range")
     confidence: ConfidenceReport = Field(default_factory=ConfidenceReport)
     explanation: str = Field(default="", description="Human-readable explanation")
     play_style: PlayStyle = Field(default=PlayStyle.BALANCED)
@@ -299,3 +321,6 @@ class FrameAnalysis(BaseModel):
         best_action=Action(action_type=ActionType.UNCERTAIN)
     ))
     processing_time_ms: float = Field(default=0.0, description="Total pipeline latency")
+
+
+PolicyResult = Recommendation

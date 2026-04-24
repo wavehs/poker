@@ -95,6 +95,34 @@ def _preprocess_generic(crop: np.ndarray, target_height: int) -> np.ndarray:
     return gray
 
 
+def preprocess_fallback(crop: np.ndarray, target_height: int = 64) -> np.ndarray:
+    """
+    Fallback preprocessing for low-confidence OCR results.
+    Applies contrast boost, 2x upscale, and thresholding.
+    """
+    if crop is None or crop.size == 0:
+        return np.zeros((target_height, target_height), dtype=np.uint8)
+
+    gray = _to_grayscale(crop)
+    gray = _auto_invert(gray)
+
+    # Contrast boost
+    gray = cv2.convertScaleAbs(gray, alpha=1.5, beta=10)
+
+    # Upscale x2
+    h, w = gray.shape[:2]
+    gray = cv2.resize(gray, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+
+    # Thresholding
+    gray = _threshold_otsu(gray)
+
+    # Resize to target height and pad
+    gray = _resize_height(gray, target_height)
+    gray = _pad(gray, px=4)
+
+    return gray
+
+
 # ─── Building blocks ────────────────────────────────────────────────────────
 
 

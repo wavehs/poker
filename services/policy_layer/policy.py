@@ -18,7 +18,10 @@ from libs.common.schemas import (
     Street,
     TableState,
 )
+from services.policy_layer.preflop_charts import get_preflop_action
+from services.solver_core.calculator import calculate_spr, get_spr_advice
 from services.solver_core.solver import EquitySolver
+from services.policy_layer.range_models import estimate_opponent_range, range_to_cards
 
 
 class PolicyEngine:
@@ -98,12 +101,17 @@ class PolicyEngine:
                 state.street,
             )
 
+        # ── Compute opponent range
+        estimated_range_set = estimate_opponent_range(state, self.play_style)
+        estimated_range_cards = range_to_cards(estimated_range_set)
+
         # ── Compute core metrics
         num_opponents = max(1, state.num_active_players - 1)
 
-        equity = self.solver.compute_equity(
+        equity = self.solver.compute_equity_vs_range(
             hero.hole_cards,
             state.community_cards,
+            opponent_range_cards=estimated_range_cards,
             num_opponents=num_opponents,
             simulations=self.simulations,
         )
@@ -120,21 +128,76 @@ class PolicyEngine:
         )
         to_call = max(0.0, max_bet - hero.bet)
 
-        pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
-        spr = state.spr
-        effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
+        # ── Preflop Chart Check
+        chart_action_type = None
+        if (
+            state.street == Street.PREFLOP
+            and hero
+            and len(hero.hole_cards) == 2
+            and all(c.is_known for c in hero.hole_cards)
+        ):
+            ranks = "23456789TJQKA"
+            c1, c2 = hero.hole_cards[0], hero.hole_cards[1]
+            r1, s1 = c1.rank.value, c1.suit.value
+            r2, s2 = c2.rank.value, c2.suit.value
 
-        # ── Check for short stack push/fold
-        if effective_stack_bb <= self.SHORT_STACK_THRESHOLD_BB and state.street == Street.PREFLOP:
-            return self._push_fold_recommendation(
-                equity, hand_strength, pot_odds, spr, effective_stack_bb,
-                state, vision_confidence, ocr_confidence, state_confidence,
-            )
+            if r1 in ranks and r2 in ranks:
+                if ranks.index(r1) < ranks.index(r2):
+                    r1, r2 = r2, r1
+
+                if r1 == r2:
+                    hand_code = f"{r1}{r2}"
+                elif s1 == s2:
+                    hand_code = f"{r1}{r2}s"
+                else:
+                    hand_code = f"{r1}{r2}o"
+
+                num_players = (
+                    len(state.players)
+                    if state.players
+                    else max(2, state.num_active_players)
+                )
+                position = self._get_hero_position(state.dealer_seat, state.hero_seat, num_players)
+
+                chart_action_type = get_preflop_action(num_players, position, hand_code)
+
+                # Default logic when hand is not in chart
+                if chart_action_type is None and to_call == 0:
+                    chart_action_type = ActionType.CHECK
+                elif chart_action_type is None and to_call > 0:
+                    chart_action_type = ActionType.FOLD
+
+pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
+spr = self.solver.compute_spr(state.effective_stack, state.pot)
+effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
+
+# ── Check for short stack push/fold
+if effective_stack_bb <= self.SHORT_STACK_THRESHOLD_BB and state.street == Street.PREFLOP:
+    return self._push_fold_recommendation(
+        equity, hand_strength, pot_odds, spr, effective_stack_bb,
+        state, vision_confidence, ocr_confidence, state_confidence,
+    )
 
         # ── Score all actions
         style_adj = self.STYLE_ADJUSTMENTS[self.play_style]
+
+        # Adjust style based on opponent profiles
+        # Performance impact: Minimal overhead. Iterating over max 9 players is O(1) conceptually.
+        # This allows hero to adjust to exploit table dynamics.
+        active_opponents = [p for p in state.players if not p.is_hero and p.is_active and p.profile is not None]
+        if active_opponents:
+            avg_vpip = sum(p.profile.vpip for p in active_opponents if p.profile is not None) / len(active_opponents)
+            avg_af = sum(p.profile.af for p in active_opponents if p.profile is not None) / len(active_opponents)
+
+            # If opponents are very loose and aggressive, tighten up slightly
+            if avg_vpip > 0.4 or avg_af > 2.0:
+                style_adj += 0.05
+            # If opponents are very tight, loosen up slightly
+            elif avg_vpip < 0.15:
+                style_adj -= 0.05
+
         actions = self._score_actions(
-            equity, pot_odds, hand_strength, spr, to_call, state, style_adj
+            equity, pot_odds, hand_strength, spr, to_call, state, style_adj, chart_action_type
         )
 
         # ── Build confidence report
@@ -152,6 +215,8 @@ class PolicyEngine:
         actions.sort(key=lambda a: a.score, reverse=True)
         best = actions[0] if actions else Action(action_type=ActionType.UNCERTAIN)
 
+        explanation = self._get_spr_advice(spr)
+
         return Recommendation(
             best_action=best,
             all_actions=actions,
@@ -159,12 +224,28 @@ class PolicyEngine:
             equity=equity,
             pot_odds=pot_odds,
             spr=spr,
+            spr_advice=get_spr_advice(spr),
             effective_stack_bb=effective_stack_bb,
+            estimated_range=list(estimated_range_set),
             confidence=confidence,
+            explanation=explanation,
             play_style=self.play_style,
             is_uncertain=confidence.is_dangerous,
             street=state.street,
         )
+
+    def _get_spr_advice(self, spr: float) -> str:
+        """Get textual advice based on SPR thresholds."""
+        if spr < 1:
+            return "SPR < 1: Автоматическое выставление (Commitment). Банк привязан, готовы к олл-ину."
+        elif spr < 4:
+            return "SPR < 4: Низкий SPR. Идеально для топ-пар и оверпар."
+        elif spr < 10:
+            return "SPR < 10: Средний SPR. Пространство для маневра, подходят сильные дро и две пары."
+        elif spr < 20:
+            return "SPR < 20: Высокий SPR. Ценятся спекулятивные руки (сет-майнинг, одномастные коннекторы)."
+        else:
+            return "SPR >= 20: Глубокие стеки. Играем от потенциальных оддсов (Implied odds)."
 
     def _score_actions(
         self,
@@ -175,6 +256,7 @@ class PolicyEngine:
         to_call: float,
         state: TableState,
         style_adj: float,
+        chart_action_type: ActionType | None = None,
     ) -> list[Action]:
         """Score all possible actions based on poker math."""
         actions: list[Action] = []
@@ -242,6 +324,13 @@ class PolicyEngine:
                 ev=all_in_ev,
             ))
 
+
+        # ── Apply Preflop Chart Boost
+        if chart_action_type:
+            for action in actions:
+                if action.action_type == chart_action_type:
+                    action.score += 10.0  # Ensure chart action is prioritized
+
         return actions
 
     def _compute_bet_size(
@@ -307,6 +396,14 @@ class PolicyEngine:
 
         rec_conf = self._compute_recommendation_confidence(equity, hand_strength, state_conf)
 
+        # Generate the estimated range again since we aren't passing it down,
+        # or we could just use the fact that it's short-stack Preflop Push/Fold scenario.
+        # It's better to log the same range. We can quickly recompute it for the recommendation.
+        estimated_range_set = estimate_opponent_range(state, self.play_style)
+
+        spr_advice = self._get_spr_advice(spr)
+        full_explanation = explanation + " " + spr_advice if explanation else spr_advice
+
         return Recommendation(
             best_action=best,
             all_actions=[best],
@@ -314,14 +411,16 @@ class PolicyEngine:
             equity=equity,
             pot_odds=pot_odds,
             spr=spr,
+            spr_advice=get_spr_advice(spr),
             effective_stack_bb=effective_stack_bb,
+            estimated_range=list(estimated_range_set),
             confidence=ConfidenceReport(
                 vision_confidence=vision_conf,
                 ocr_confidence=ocr_conf,
                 state_confidence=state_conf,
                 recommendation_confidence=rec_conf,
             ),
-            explanation=explanation,
+            explanation=full_explanation,
             play_style=self.play_style,
             is_uncertain=False,
             street=state.street,
@@ -342,6 +441,7 @@ class PolicyEngine:
             equity=0.0,
             pot_odds=0.0,
             spr=0.0,
+            spr_advice=get_spr_advice(0.0),
             effective_stack_bb=0.0,
             confidence=ConfidenceReport(
                 vision_confidence=vision_conf,
@@ -354,6 +454,30 @@ class PolicyEngine:
             is_uncertain=True,
             street=street,
         )
+
+
+    @staticmethod
+    def _get_hero_position(dealer_seat: int, hero_seat: int, num_players: int) -> str:
+        if num_players <= 2:
+            return "BTN" if (hero_seat == dealer_seat) else "BB"
+
+        if dealer_seat < 0 or hero_seat < 0:
+            return "UTG"  # Fallback
+
+        offset = (hero_seat - dealer_seat) % num_players
+
+        if offset == 0:
+            return "BTN"
+        elif offset == 1:
+            return "SB"
+        elif offset == 2:
+            return "BB"
+        elif offset == num_players - 1:
+            return "CO"
+        elif offset == num_players - 2 or offset == num_players - 3 and num_players >= 8:
+            return "MP"
+        else:
+            return "UTG"
 
     @staticmethod
     def _compute_recommendation_confidence(

@@ -9,7 +9,9 @@ Phase 2: Adds ObjectTracker integration, per-stage profiling, and StageTimings.
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -23,6 +25,7 @@ from services.explainer.explainer import Explainer
 from services.ocr_core.ocr import OCREngine
 from services.policy_layer.policy import PolicyEngine
 from services.state_engine.engine import StateEngine
+from services.opponent_tracker.tracker import OpponentTracker
 from services.vision_core.detector import VisionDetector
 from services.vision_core.tracker import ObjectTracker
 
@@ -44,6 +47,7 @@ class Pipeline:
         policy: PolicyEngine | None = None,
         explainer: Explainer | None = None,
         tracker: ObjectTracker | None = None,
+        opponent_tracker: OpponentTracker | None = None,
         enable_profiling: bool = False,
     ) -> None:
         self.capture = capture or CaptureAgent()
@@ -53,7 +57,13 @@ class Pipeline:
         self.policy = policy or PolicyEngine()
         self.explainer = explainer or Explainer()
         self.tracker = tracker  # None = no tracking
+        self.opponent_tracker = opponent_tracker or OpponentTracker()
         self.profiler = PipelineProfiler() if enable_profiling else None
+
+        self.session_file = Path(f"data/sessions/{int(time.time())}.jsonl")
+        self.session_file.parent.mkdir(parents=True, exist_ok=True)
+        self._last_is_hand_in_progress = False
+        self._current_hand_data = None
 
     def analyze_frame(
         self,
@@ -108,6 +118,10 @@ class Pipeline:
         # Use tracker-provided objects if available, else state engine's
         final_tracked = tracked_objects if self.tracker else state_tracked
 
+        # ── Step 4.5: Update opponent tracking
+        # This attaches the profile to players in table_state
+        self.opponent_tracker.update(table_state)
+
         # ── Step 5: Compute confidence scores
         vision_conf = (
             sum(d.bbox.confidence for d in detections) / len(detections)
@@ -137,6 +151,25 @@ class Pipeline:
 
         processing_time = (time.perf_counter() - t0) * 1000
         timings.total_ms = processing_time
+
+        is_in_progress = table_state.is_hand_in_progress
+        if is_in_progress:
+            hero = table_state.hero
+            self._current_hand_data = {
+                "hole_cards": [c.model_dump() for c in hero.hole_cards] if hero else [],
+                "board": [c.model_dump() for c in table_state.community_cards],
+                "action_taken": hero.last_action.value if hero and hero.last_action else None,
+                "recommended_action": recommendation.best_action.action_type.value if recommendation and recommendation.best_action else None,
+                "pot_size": table_state.pot
+            }
+        elif self._last_is_hand_in_progress and not is_in_progress:
+            # Hand just finished, write to file
+            if self._current_hand_data:
+                with open(self.session_file, "a") as f:
+                    f.write(json.dumps(self._current_hand_data) + "\n")
+                self._current_hand_data = None
+
+        self._last_is_hand_in_progress = is_in_progress
 
         # Record profiling data
         if self.profiler:

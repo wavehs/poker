@@ -199,6 +199,73 @@ class TestOCREngineMock:
         assert len(results) == 0
 
 
+# ─── OCREngine — Real OCR Edge Cases ────────────────────────────────────────
+
+from unittest.mock import MagicMock, patch
+
+class TestOCREngineEdgeCases:
+    def test_ocr_fallback_low_confidence(self):
+        engine = OCREngine(backend="auto")
+        # Ensure it acts like a real backend so fallback logic triggers
+        engine._use_real_ocr = True
+
+        # Replace actual backend with a mock
+        engine._backend_impl = MagicMock()
+
+        # Simulate recognize returning low confidence first, then high confidence on fallback
+        engine._backend_impl.recognize.side_effect = [
+            [("50", 0.6, None)],     # First try: low confidence (0.6 < 0.7)
+            [("500", 0.9, None)]     # Fallback try: higher confidence (0.9)
+        ]
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=20, confidence=0.8)
+
+        with patch("services.ocr_core.ocr.preprocess_fallback", return_value=np.zeros((100, 100), dtype=np.uint8)) as mock_fallback:
+            result = engine.extract_region(frame, bbox, field_type="pot")
+
+            assert mock_fallback.called
+            assert result is not None
+            assert result.text == "500"
+            assert result.confidence == 0.9
+
+    def test_ocr_validation_out_of_range(self):
+        engine = OCREngine(backend="auto")
+        engine._use_real_ocr = True
+        engine._backend_impl = MagicMock()
+
+        # Simulate recognize returning a number > 1000000
+        engine._backend_impl.recognize.side_effect = [
+            [("2000000", 0.9, None)] # First try: confidence is good, but value is out of range
+        ]
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=20, confidence=0.8)
+
+        result = engine.extract_region(frame, bbox, field_type="pot")
+
+        # Should return None because 2000000 > 1000000
+        assert result is None
+
+    def test_ocr_validation_not_numeric(self):
+        engine = OCREngine(backend="auto")
+        engine._use_real_ocr = True
+        engine._backend_impl = MagicMock()
+
+        # Simulate recognize returning non-numeric text for a numeric field
+        engine._backend_impl.recognize.side_effect = [
+            [("hello", 0.9, None)]
+        ]
+
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        bbox = BoundingBox(x=10, y=10, w=50, h=20, confidence=0.8)
+
+        result = engine.extract_region(frame, bbox, field_type="pot")
+
+        # Should return None because 'hello' cannot be parsed to float
+        assert result is None
+
+
 # ─── OCREngine — Clean numeric ──────────────────────────────────────────────
 
 
