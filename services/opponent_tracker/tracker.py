@@ -166,3 +166,51 @@ class OpponentTracker:
             fold_to_cbet_pct=min(1.0, fold_cbet),
             hands_played=int(stats["hands_played"])
         )
+
+    def get_exploits(self, seat_id: int) -> list[dict[str, str | float]]:
+        """
+        Analyze accumulated statistics and return a list of specific exploits with confidence.
+        Returns a list of dicts like: [{"exploit": "cbet_always", "confidence": 0.82}]
+        """
+        if seat_id not in self.profiles_raw:
+            return []
+
+        stats = self.profiles_raw[seat_id]
+        hands = int(stats.get("hands_played", 0))
+
+        # We need a minimal sample size to be confident in any exploit
+        if hands < 5:
+            return []
+
+        exploits = []
+
+        # 1. cbet_always: Exploit players who fold too much to c-bets
+        faced_cbet = int(stats.get("faced_cbet", 0))
+        if faced_cbet >= 3:
+            fold_cbet = float(stats["folded_to_cbet"]) / faced_cbet
+            if fold_cbet >= 0.60:
+                # Confidence scales with sample size, maxing out at fold_cbet value
+                sample_confidence_modifier = min(1.0, faced_cbet / 10.0)
+                confidence = round(fold_cbet * sample_confidence_modifier, 2)
+                if confidence >= 0.5:
+                    exploits.append({"exploit": "cbet_always", "confidence": confidence})
+
+        # 2. value_bet_thin: Exploit calling stations (high VPIP, low AF)
+        vpip = float(stats["vpip_hands"]) / hands
+        aggr = float(stats["aggr_actions"])
+        pass_act = float(stats["pass_actions"])
+        af = aggr / pass_act if pass_act > 0 else (aggr if aggr > 0 else 0.0)
+
+        if hands >= 10 and vpip > 0.40 and af < 1.0:
+            confidence = round(min(0.95, vpip * (1.5 - af)), 2)
+            if confidence >= 0.5:
+                exploits.append({"exploit": "value_bet_thin", "confidence": confidence})
+
+        # 3. steal_blinds: Exploit tight players (low VPIP)
+        if hands >= 10 and vpip < 0.15:
+            # lower VPIP means higher confidence in steal
+            confidence = round(min(0.95, 1.0 - (vpip * 5)), 2)
+            if confidence >= 0.5:
+                exploits.append({"exploit": "steal_blinds", "confidence": confidence})
+
+        return exploits
