@@ -173,7 +173,7 @@ def _compare_hands(
     """Compare two hand evaluations. Returns >0 if a wins, <0 if b wins, 0 if tie."""
     if a[0] != b[0]:
         return a[0] - b[0]
-    for ka, kb in zip(a[2], b[2]):
+    for ka, kb in zip(a[2], b[2], strict=False):
         if ka != kb:
             return ka - kb
     return 0
@@ -360,23 +360,24 @@ class EquitySolver:
         profile.deck_build_ms = (time.perf_counter() - t_deck) * 1000
 
         # Pre-filter range cards to exclude combinations conflicting with known cards
-        valid_range_cards = None
+        valid_range_cards: list[tuple[int, int]] | None = None
         if opponent_range_cards is not None:
-            valid_range_cards = []
+            temp_range = []
             for combo in opponent_range_cards:
                 if combo[0] not in known and combo[1] not in known:
-                    valid_range_cards.append(combo)
+                    temp_range.append(combo)
 
             # If after filtering the range is empty, fallback to random
-            if not valid_range_cards:
-                valid_range_cards = None
+            if temp_range:
+                valid_range_cards = temp_range
 
         # ── Run Monte Carlo
         t_sim = time.perf_counter()
         cards_needed = 5 - len(board_ints)
 
-        # When picking random hands, we need cards for the board + opponent hands
-        # When using range, we draw the opponent hand separately, so we just need board cards + cards for any *other* random opponents
+        # When picking random hands, we need cards for the board + opp hands
+        # When using range, we draw the opponent hand separately
+        # so we just need board cards + cards for any *other* random opponents
         random_cards_needed = cards_needed
         if valid_range_cards is None:
             random_cards_needed += num_opponents * 2
@@ -397,27 +398,26 @@ class EquitySolver:
             for _ in range(batch_start, batch_end):
                 if valid_range_cards:
                     opp_hand = random.choice(valid_range_cards)
-                    # Fast check to avoid full list comprehension if we don't have enough cards anyway
+                    # Fast check to avoid list comprehension if not enough cards
                     if len(deck) - 2 < random_cards_needed:
                         continue
 
                     # Instead of creating current_deck every loop, sample and then filter.
                     # This is slightly faster on average if random_cards_needed is small.
                     # Or we can just resample if we hit one of the 2 opponent cards.
-                    sampled_deck = []
+                    sampled_deck: list[int] = []
                     while len(sampled_deck) < random_cards_needed:
                         s = random.choice(deck)
                         if s not in opp_hand and s not in sampled_deck:
                             sampled_deck.append(s)
 
-                    # Inject the opponent hand to the front of sampled_deck to match the signature expectation
-                    # where opponents are drawn from the deck sequentially
-                    # But since cards_needed comes before opponents in _simulate_once_int... wait. Let's look at _simulate_once_int
-                    # Actually _simulate_once_int draws cards_needed first for the board, then 2 for each opponent.
+                    # Inject the opponent hand into sampled_deck to match
+                    # the signature expectation where opponents are drawn sequentially
+                    # _simulate_once_int draws cards_needed first for the board.
                     board_samples = sampled_deck[:cards_needed]
                     other_opp_samples = sampled_deck[cards_needed:]
 
-                    # Construct a deck that _simulate_once_int expects: board_cards + opp1_cards + opp2_cards...
+                    # Construct expected deck: board + opp1 + opp2...
                     custom_deck = board_samples + list(opp_hand) + other_opp_samples
 
                     result = self._simulate_once_int(
@@ -510,6 +510,98 @@ class EquitySolver:
             return 0
         else:
             return -1
+
+    def compute_range_vs_range_equity(
+        self,
+        hero_range_cards: list[tuple[int, int]],
+        villain_range_cards: list[tuple[int, int]],
+        community_cards: list[Card],
+        simulations: int | None = None,
+    ) -> dict[tuple[int, int], float]:
+        """
+        Compute equity for each hand in the hero's range against the entire
+        villain range via Monte Carlo simulation.
+
+        Returns:
+            Dictionary mapping each valid hero hand tuple to its equity [0, 1].
+        """
+        if not hero_range_cards or not villain_range_cards:
+            return {}
+
+        sims = simulations or self.default_simulations
+        board_ints = [_card_obj_to_int(c) for c in community_cards if c.is_known]
+
+        # Filter known cards
+        known = set(board_ints)
+        deck = [c for c in self._full_deck if c not in known]
+
+        # Pre-filter valid ranges
+        valid_v_hands = []
+        for combo in villain_range_cards:
+            if combo[0] not in known and combo[1] not in known:
+                valid_v_hands.append(combo)
+
+        valid_h_hands = []
+        for combo in hero_range_cards:
+            if combo[0] not in known and combo[1] not in known:
+                valid_h_hands.append(combo)
+
+        if not valid_v_hands or not valid_h_hands:
+            return {}
+
+        wins = {h: 0.0 for h in valid_h_hands}
+        ties = {h: 0.0 for h in valid_h_hands}
+        totals = {h: 0.0 for h in valid_h_hands}
+
+        cards_needed = 5 - len(board_ints)
+
+        if self.enable_cache:
+            self._board_cache = {}
+
+        for _ in range(sims):
+            v_hand = random.choice(valid_v_hands)
+
+            # Fast check
+            if len(deck) - 2 < cards_needed:
+                continue
+
+            # Draw board
+            sampled_board: list[int] = []
+            while len(sampled_board) < cards_needed:
+                s = random.choice(deck)
+                if s not in v_hand and s not in sampled_board:
+                    sampled_board.append(s)
+
+            full_board = board_ints + sampled_board
+
+            # Evaluate villain
+            v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
+
+            # Evaluate hero hands
+            for h_hand in valid_h_hands:
+                if (h_hand[0] in v_hand or h_hand[1] in v_hand or
+                    h_hand[0] in sampled_board or h_hand[1] in sampled_board):
+                    continue
+
+                h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
+
+                if h_rank > v_rank:
+                    wins[h_hand] += 1
+                elif h_rank == v_rank:
+                    ties[h_hand] += 1
+                totals[h_hand] += 1
+
+        if self.enable_cache:
+            self._board_cache = None
+
+        distribution = {}
+        for h_hand in valid_h_hands:
+            if totals[h_hand] > 0:
+                distribution[h_hand] = (wins[h_hand] + ties[h_hand] * 0.5) / totals[h_hand]
+            else:
+                distribution[h_hand] = 0.0
+
+        return distribution
 
     def compute_hand_strength(
         self,

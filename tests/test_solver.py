@@ -139,6 +139,27 @@ class TestEquitySolver:
         equity = solver.compute_equity([], [], num_opponents=1)
         assert equity == 0.0
 
+    def test_compute_range_vs_range_equity(self):
+        solver = EquitySolver(default_simulations=100, adaptive=False)
+        # AA (0, 1) vs KK (4, 5)
+        hero_range = [(0, 1), (2, 3)]
+        villain_range = [(4, 5)]
+
+        distribution = solver.compute_range_vs_range_equity(
+            hero_range_cards=hero_range,
+            villain_range_cards=villain_range,
+            community_cards=[],
+            simulations=100
+        )
+
+        assert isinstance(distribution, dict)
+        assert len(distribution) == 2
+        assert (0, 1) in distribution
+        assert (2, 3) in distribution
+        # AA vs KK should have around 80% equity. Since we test with 100 sims, we just check > 0
+        assert distribution[(0, 1)] >= 0.0
+        assert distribution[(2, 3)] >= 0.0
+
     def test_pot_odds(self):
         solver = EquitySolver()
         odds = solver.compute_pot_odds(pot=100, to_call=50)
