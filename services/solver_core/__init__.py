@@ -10,10 +10,14 @@ from services.solver_core.evaluator import (
 )
 from services.solver_core.solver import EquitySolver, SolverProfile
 
+from services.solver_core.calculator import calculate_spr, get_spr_advice
+
 __all__ = [
     "EquitySolver",
     "SolverProfile",
     "HandEvaluator",
+    "calculate_spr",
+    "get_spr_advice",
     "BuiltinEvaluator",
     "Eval7Evaluator",
     "TreysEvaluator",

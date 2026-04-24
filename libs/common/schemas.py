@@ -297,6 +297,7 @@ class Recommendation(BaseModel):
     equity: float = Field(default=0.0, ge=0.0, le=1.0, description="Monte Carlo equity [0,1]")
     pot_odds: float = Field(default=0.0, ge=0.0, description="Pot odds ratio")
     spr: float = Field(default=0.0, ge=0.0, description="Stack-to-pot ratio")
+    spr_advice: str = Field(default="", description="SPR recommendation")
     effective_stack_bb: float = Field(default=0.0, ge=0.0, description="Effective stack in BBs")
     estimated_range: list[str] = Field(default_factory=list, description="Opponent estimated range")
     confidence: ConfidenceReport = Field(default_factory=ConfidenceReport)
@@ -320,3 +321,6 @@ class FrameAnalysis(BaseModel):
         best_action=Action(action_type=ActionType.UNCERTAIN)
     ))
     processing_time_ms: float = Field(default=0.0, description="Total pipeline latency")
+
+
+PolicyResult = Recommendation

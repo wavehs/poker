@@ -19,6 +19,7 @@ from libs.common.schemas import (
     TableState,
 )
 from services.policy_layer.preflop_charts import get_preflop_action
+from services.solver_core.calculator import calculate_spr, get_spr_advice
 from services.solver_core.solver import EquitySolver
 from services.policy_layer.range_models import estimate_opponent_range, range_to_cards
 
@@ -167,7 +168,7 @@ class PolicyEngine:
                     chart_action_type = ActionType.FOLD
 
         pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
-        spr = state.spr
+        spr = calculate_spr(state.effective_stack, state.pot)
         effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
 
         # ── Check for short stack push/fold
@@ -221,6 +222,7 @@ class PolicyEngine:
             equity=equity,
             pot_odds=pot_odds,
             spr=spr,
+            spr_advice=get_spr_advice(spr),
             effective_stack_bb=effective_stack_bb,
             estimated_range=list(estimated_range_set),
             confidence=confidence,
@@ -390,6 +392,7 @@ class PolicyEngine:
             equity=equity,
             pot_odds=pot_odds,
             spr=spr,
+            spr_advice=get_spr_advice(spr),
             effective_stack_bb=effective_stack_bb,
             estimated_range=list(estimated_range_set),
             confidence=ConfidenceReport(
@@ -419,6 +422,7 @@ class PolicyEngine:
             equity=0.0,
             pot_odds=0.0,
             spr=0.0,
+            spr_advice=get_spr_advice(0.0),
             effective_stack_bb=0.0,
             confidence=ConfidenceReport(
                 vision_confidence=vision_conf,
