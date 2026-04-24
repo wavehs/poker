@@ -545,6 +545,21 @@ class EquitySolver:
             return 0.0
         return to_call / (pot + to_call)
 
+    def compute_spr(self, effective_stack: float, pot_size: float) -> float:
+        """
+        Compute stack-to-pot ratio (SPR).
+
+        Args:
+            effective_stack: The effective stack size.
+            pot_size: Current pot size.
+
+        Returns:
+            SPR as a float.
+        """
+        if pot_size <= 0:
+            return float("inf")
+        return effective_stack / pot_size
+
     def _build_deck(self, exclude: set[str]) -> list[Card]:
         """Build a deck of all cards minus excluded ones.
 
