@@ -103,64 +103,68 @@ def _evaluate_five_int(c0: int, c1: int, c2: int, c3: int, c4: int) -> int:
     # Sort ranks descending (insertion sort for 5 elements)
     ranks = [r0, r1, r2, r3, r4]
     ranks.sort(reverse=True)
+    v0, v1, v2, v3, v4 = ranks
 
     is_flush = s0 == s1 == s2 == s3 == s4
 
     # Check straight
     is_straight = False
     straight_high = -1
-    if ranks[0] - ranks[4] == 4 and len(set(ranks)) == 5:
+
+    # Fast boolean checks for straight without allocating sets
+    if v0 == v1 + 1 and v1 == v2 + 1 and v2 == v3 + 1 and v3 == v4 + 1:
         is_straight = True
-        straight_high = ranks[0]
-    elif ranks == [12, 3, 2, 1, 0]:  # A-2-3-4-5 (wheel)
+        straight_high = v0
+    elif v0 == 12 and v1 == 3 and v2 == 2 and v3 == 1 and v4 == 0:  # A-2-3-4-5 (wheel)
         is_straight = True
         straight_high = 3
-
-    # Count ranks
-    counts: dict[int, int] = {}
-    for r in ranks:
-        counts[r] = counts.get(r, 0) + 1
-
-    # Classify by counts
-    count_values = sorted(counts.values(), reverse=True)
 
     if is_flush and is_straight:
         return _STRAIGHT_FLUSH + straight_high
 
-    if count_values == [4, 1]:
-        quad_r = [r for r, c in counts.items() if c == 4][0]
-        kick = [r for r, c in counts.items() if c == 1][0]
+    # Instead of dictionary counts, use boolean logic on the sorted ranks
+    # to find pairs, trips, quads and full houses extremely fast.
+    if v0 == v3 or v1 == v4:
+        quad_r = v1
+        kick = v4 if v0 == v3 else v0
         return _FOUR_KIND + quad_r * 15 + kick
 
-    if count_values == [3, 2]:
-        trip_r = [r for r, c in counts.items() if c == 3][0]
-        pair_r = [r for r, c in counts.items() if c == 2][0]
+    if (v0 == v2 and v3 == v4) or (v0 == v1 and v2 == v4):
+        trip_r = v2
+        pair_r = v4 if v0 == v2 else v0
         return _FULL_HOUSE + trip_r * 15 + pair_r
 
     if is_flush:
-        return _FLUSH + ranks[0] * 15**4 + ranks[1] * 15**3 + ranks[2] * 15**2 + ranks[3] * 15 + ranks[4]
+        return _FLUSH + v0 * 50625 + v1 * 3375 + v2 * 225 + v3 * 15 + v4
 
     if is_straight:
         return _STRAIGHT + straight_high
 
-    if count_values == [3, 1, 1]:
-        trip_r = [r for r, c in counts.items() if c == 3][0]
-        kickers = sorted([r for r, c in counts.items() if c == 1], reverse=True)
-        return _THREE_KIND + trip_r * 15**2 + kickers[0] * 15 + kickers[1]
+    if v0 == v2:
+        return _THREE_KIND + v0 * 225 + v3 * 15 + v4
+    elif v1 == v3:
+        return _THREE_KIND + v1 * 225 + v0 * 15 + v4
+    elif v2 == v4:
+        return _THREE_KIND + v2 * 225 + v0 * 15 + v1
 
-    if count_values == [2, 2, 1]:
-        pairs = sorted([r for r, c in counts.items() if c == 2], reverse=True)
-        kick = [r for r, c in counts.items() if c == 1][0]
-        return _TWO_PAIR + pairs[0] * 15**2 + pairs[1] * 15 + kick
+    if v0 == v1 and v2 == v3:
+        return _TWO_PAIR + v0 * 225 + v2 * 15 + v4
+    elif v0 == v1 and v3 == v4:
+        return _TWO_PAIR + v0 * 225 + v3 * 15 + v2
+    elif v1 == v2 and v3 == v4:
+        return _TWO_PAIR + v1 * 225 + v3 * 15 + v0
 
-    if count_values == [2, 1, 1, 1]:
-        pair_r = [r for r, c in counts.items() if c == 2][0]
-        kickers = sorted([r for r, c in counts.items() if c == 1], reverse=True)
-        return _PAIR + pair_r * 15**3 + kickers[0] * 15**2 + kickers[1] * 15 + kickers[2]
+    if v0 == v1:
+        return _PAIR + v0 * 3375 + v2 * 225 + v3 * 15 + v4
+    elif v1 == v2:
+        return _PAIR + v1 * 3375 + v0 * 225 + v3 * 15 + v4
+    elif v2 == v3:
+        return _PAIR + v2 * 3375 + v0 * 225 + v1 * 15 + v4
+    elif v3 == v4:
+        return _PAIR + v3 * 3375 + v0 * 225 + v1 * 15 + v2
 
     # High card
-    return _HIGH_CARD + ranks[0] * 15**4 + ranks[1] * 15**3 + ranks[2] * 15**2 + ranks[3] * 15 + ranks[4]
-
+    return _HIGH_CARD + v0 * 50625 + v1 * 3375 + v2 * 225 + v3 * 15 + v4
 
 class BuiltinEvaluator:
     """Pure-Python hand evaluator using integer card encoding.
