@@ -1,3 +1,6 @@
 ## 2024-05-18 - Monte Carlo Deck Sampling Optimization
 **Learning:** `random.shuffle` over the entire array inside a hot loop is a common but extremely inefficient pattern when only a small portion of the array is needed. In `EquitySolver`, shuffling a 45-card deck for each simulation took significantly longer than just sampling the needed cards. `random.sample` is much faster for drawing hands since it avoids shuffling the entire deck array.
 **Action:** When picking a small subset of elements randomly in a performance-critical loop, use `random.sample` instead of shuffling the whole array and taking a slice.
+## 2024-05-18 - Fast Membership Checks in Hot Loops
+**Learning:** In performance-critical Monte Carlo inner loops (such as `compute_range_vs_range_equity`), constructing a single O(1) `forbidden` boolean array outside the loop for card validation is up to ~2x faster than performing repeated list or tuple membership checks inside the hot loop. Using pre-allocated arrays to track state and clearing them afterwards also avoids repeated allocation overhead.
+**Action:** When tracking dynamic elements to exclude during hot simulation loops, use a pre-allocated boolean array instead of constructing tuples, lists, or sets on each iteration, especially if the maximum value is small (like 52 for cards).

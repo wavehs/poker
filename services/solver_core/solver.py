@@ -558,6 +558,10 @@ class EquitySolver:
         if self.enable_cache:
             self._board_cache = {}
 
+        # ⚡ Bolt: Allocate O(1) forbidden array outside the hot loop
+        # Memory tracking of used cards avoids multiple `in` operator checks
+        forbidden = [False] * 52
+
         for _ in range(sims):
             v_hand = random.choice(valid_v_hands)
 
@@ -565,11 +569,13 @@ class EquitySolver:
             if len(deck) - 2 < cards_needed:
                 continue
 
+            v0, v1 = v_hand
+
             # Draw board
             sampled_board: list[int] = []
             while len(sampled_board) < cards_needed:
                 s = random.choice(deck)
-                if s not in v_hand and s not in sampled_board:
+                if s != v0 and s != v1 and s not in sampled_board:
                     sampled_board.append(s)
 
             full_board = board_ints + sampled_board
@@ -577,10 +583,15 @@ class EquitySolver:
             # Evaluate villain
             v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
 
+            # ⚡ Bolt: Mark forbidden cards in O(1) array
+            forbidden[v0] = True
+            forbidden[v1] = True
+            for s in sampled_board:
+                forbidden[s] = True
+
             # Evaluate hero hands
             for h_hand in valid_h_hands:
-                if (h_hand[0] in v_hand or h_hand[1] in v_hand or
-                    h_hand[0] in sampled_board or h_hand[1] in sampled_board):
+                if forbidden[h_hand[0]] or forbidden[h_hand[1]]:
                     continue
 
                 h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
@@ -590,6 +601,12 @@ class EquitySolver:
                 elif h_rank == v_rank:
                     ties[h_hand] += 1
                 totals[h_hand] += 1
+
+            # ⚡ Bolt: Unmark forbidden cards to reuse array
+            forbidden[v0] = False
+            forbidden[v1] = False
+            for s in sampled_board:
+                forbidden[s] = False
 
         if self.enable_cache:
             self._board_cache = None
