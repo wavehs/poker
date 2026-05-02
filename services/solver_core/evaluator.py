@@ -100,66 +100,85 @@ def _evaluate_five_int(c0: int, c1: int, c2: int, c3: int, c4: int) -> int:
     r0, r1, r2, r3, r4 = c0 // 4, c1 // 4, c2 // 4, c3 // 4, c4 // 4
     s0, s1, s2, s3, s4 = c0 % 4, c1 % 4, c2 % 4, c3 % 4, c4 % 4
 
-    # Sort ranks descending (insertion sort for 5 elements)
-    ranks = [r0, r1, r2, r3, r4]
-    ranks.sort(reverse=True)
+    # Sort ranks descending manually (sorting network, allocation-free)
+    if r0 < r1: r0, r1 = r1, r0
+    if r1 < r2: r1, r2 = r2, r1
+    if r2 < r3: r2, r3 = r3, r2
+    if r3 < r4: r3, r4 = r4, r3
+    if r0 < r1: r0, r1 = r1, r0
+    if r1 < r2: r1, r2 = r2, r1
+    if r2 < r3: r2, r3 = r3, r2
+    if r0 < r1: r0, r1 = r1, r0
+    if r1 < r2: r1, r2 = r2, r1
+    if r0 < r1: r0, r1 = r1, r0
 
-    is_flush = s0 == s1 == s2 == s3 == s4
+    is_flush = s0 == s1 and s1 == s2 and s2 == s3 and s3 == s4
 
     # Check straight
     is_straight = False
     straight_high = -1
-    if ranks[0] - ranks[4] == 4 and len(set(ranks)) == 5:
+
+    # Check for non-wheel straight (no duplicates and max - min == 4)
+    if r0 - r4 == 4 and r0 != r1 and r1 != r2 and r2 != r3 and r3 != r4:
         is_straight = True
-        straight_high = ranks[0]
-    elif ranks == [12, 3, 2, 1, 0]:  # A-2-3-4-5 (wheel)
+        straight_high = r0
+    # Check for wheel straight (A-2-3-4-5)
+    elif r0 == 12 and r1 == 3 and r2 == 2 and r3 == 1 and r4 == 0:
         is_straight = True
         straight_high = 3
-
-    # Count ranks
-    counts: dict[int, int] = {}
-    for r in ranks:
-        counts[r] = counts.get(r, 0) + 1
-
-    # Classify by counts
-    count_values = sorted(counts.values(), reverse=True)
 
     if is_flush and is_straight:
         return _STRAIGHT_FLUSH + straight_high
 
-    if count_values == [4, 1]:
-        quad_r = [r for r, c in counts.items() if c == 4][0]
-        kick = [r for r, c in counts.items() if c == 1][0]
-        return _FOUR_KIND + quad_r * 15 + kick
+    # Four of a kind
+    if r0 == r3 or r1 == r4:
+        if r0 == r3:
+            return _FOUR_KIND + r0 * 15 + r4
+        else:
+            return _FOUR_KIND + r1 * 15 + r0
 
-    if count_values == [3, 2]:
-        trip_r = [r for r, c in counts.items() if c == 3][0]
-        pair_r = [r for r, c in counts.items() if c == 2][0]
-        return _FULL_HOUSE + trip_r * 15 + pair_r
+    # Full house
+    if (r0 == r2 and r3 == r4) or (r0 == r1 and r2 == r4):
+        if r0 == r2:
+            return _FULL_HOUSE + r0 * 15 + r4
+        else:
+            return _FULL_HOUSE + r2 * 15 + r0
 
     if is_flush:
-        return _FLUSH + ranks[0] * 15**4 + ranks[1] * 15**3 + ranks[2] * 15**2 + ranks[3] * 15 + ranks[4]
+        return _FLUSH + r0 * 50625 + r1 * 3375 + r2 * 225 + r3 * 15 + r4
 
     if is_straight:
         return _STRAIGHT + straight_high
 
-    if count_values == [3, 1, 1]:
-        trip_r = [r for r, c in counts.items() if c == 3][0]
-        kickers = sorted([r for r, c in counts.items() if c == 1], reverse=True)
-        return _THREE_KIND + trip_r * 15**2 + kickers[0] * 15 + kickers[1]
+    # Three of a kind
+    if r0 == r2 or r1 == r3 or r2 == r4:
+        if r0 == r2:
+            return _THREE_KIND + r0 * 225 + r3 * 15 + r4
+        elif r1 == r3:
+            return _THREE_KIND + r1 * 225 + r0 * 15 + r4
+        else:
+            return _THREE_KIND + r2 * 225 + r0 * 15 + r1
 
-    if count_values == [2, 2, 1]:
-        pairs = sorted([r for r, c in counts.items() if c == 2], reverse=True)
-        kick = [r for r, c in counts.items() if c == 1][0]
-        return _TWO_PAIR + pairs[0] * 15**2 + pairs[1] * 15 + kick
+    # Two pair
+    if r0 == r1 and r2 == r3:
+        return _TWO_PAIR + r0 * 225 + r2 * 15 + r4
+    if r0 == r1 and r3 == r4:
+        return _TWO_PAIR + r0 * 225 + r3 * 15 + r2
+    if r1 == r2 and r3 == r4:
+        return _TWO_PAIR + r1 * 225 + r3 * 15 + r0
 
-    if count_values == [2, 1, 1, 1]:
-        pair_r = [r for r, c in counts.items() if c == 2][0]
-        kickers = sorted([r for r, c in counts.items() if c == 1], reverse=True)
-        return _PAIR + pair_r * 15**3 + kickers[0] * 15**2 + kickers[1] * 15 + kickers[2]
+    # Pair
+    if r0 == r1:
+        return _PAIR + r0 * 3375 + r2 * 225 + r3 * 15 + r4
+    if r1 == r2:
+        return _PAIR + r1 * 3375 + r0 * 225 + r3 * 15 + r4
+    if r2 == r3:
+        return _PAIR + r2 * 3375 + r0 * 225 + r1 * 15 + r4
+    if r3 == r4:
+        return _PAIR + r3 * 3375 + r0 * 225 + r1 * 15 + r2
 
     # High card
-    return _HIGH_CARD + ranks[0] * 15**4 + ranks[1] * 15**3 + ranks[2] * 15**2 + ranks[3] * 15 + ranks[4]
+    return _HIGH_CARD + r0 * 50625 + r1 * 3375 + r2 * 225 + r3 * 15 + r4
 
 
 class BuiltinEvaluator:
@@ -183,13 +202,47 @@ class BuiltinEvaluator:
         if n == 5:
             return _evaluate_five_int(cards[0], cards[1], cards[2], cards[3], cards[4])
 
-        # 6-7 cards: find best 5-card combination
+        # 6-7 cards: unroll combinations for performance
         best = -1
-        for combo in itertools.combinations(cards, 5):
-            val = _evaluate_five_int(combo[0], combo[1], combo[2], combo[3], combo[4])
-            if val > best:
-                best = val
-        return best
+        if n == 7:
+            c0, c1, c2, c3, c4, c5, c6 = cards
+            val = _evaluate_five_int(c0, c1, c2, c3, c4); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c3, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c3, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c3, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c3, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c2, c3, c4, c5, c6); best = val if val > best else best
+            return best
+        elif n == 6:
+            c0, c1, c2, c3, c4, c5 = cards
+            val = _evaluate_five_int(c0, c1, c2, c3, c4); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c3, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c4, c5); best = val if val > best else best
+            return best
+        else:
+            for combo in itertools.combinations(cards, 5):
+                val = _evaluate_five_int(combo[0], combo[1], combo[2], combo[3], combo[4])
+                if val > best:
+                    best = val
+            return best
 
 
 # ─── Eval7 Backend ───────────────────────────────────────────────────────────
