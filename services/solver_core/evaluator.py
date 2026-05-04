@@ -94,72 +94,90 @@ _STRAIGHT_FLUSH = 8_000_000
 def _evaluate_five_int(c0: int, c1: int, c2: int, c3: int, c4: int) -> int:
     """Evaluate exactly 5 cards (as ints). Returns int rank (higher = better).
 
-    Optimized: no object allocations, no Counter, no sorted().
+    Optimized: completely allocation-free. Uses an inline sorting network
+    and logic instead of lists/dicts/sets.
     """
     # Extract ranks and suits
     r0, r1, r2, r3, r4 = c0 // 4, c1 // 4, c2 // 4, c3 // 4, c4 // 4
     s0, s1, s2, s3, s4 = c0 % 4, c1 % 4, c2 % 4, c3 % 4, c4 % 4
 
-    # Sort ranks descending (insertion sort for 5 elements)
-    ranks = [r0, r1, r2, r3, r4]
-    ranks.sort(reverse=True)
+    # Inline sorting network for 5 elements (descending)
+    if r0 < r1: r0, r1 = r1, r0
+    if r1 < r2: r1, r2 = r2, r1
+    if r2 < r3: r2, r3 = r3, r2
+    if r3 < r4: r3, r4 = r4, r3
+    if r0 < r1: r0, r1 = r1, r0
+    if r1 < r2: r1, r2 = r2, r1
+    if r2 < r3: r2, r3 = r3, r2
+    if r0 < r1: r0, r1 = r1, r0
+    if r1 < r2: r1, r2 = r2, r1
+    if r0 < r1: r0, r1 = r1, r0
 
     is_flush = s0 == s1 == s2 == s3 == s4
 
     # Check straight
     is_straight = False
     straight_high = -1
-    if ranks[0] - ranks[4] == 4 and len(set(ranks)) == 5:
+    unique_5 = r0 != r1 and r1 != r2 and r2 != r3 and r3 != r4
+    if r0 - r4 == 4 and unique_5:
         is_straight = True
-        straight_high = ranks[0]
-    elif ranks == [12, 3, 2, 1, 0]:  # A-2-3-4-5 (wheel)
+        straight_high = r0
+    elif r0 == 12 and r1 == 3 and r2 == 2 and r3 == 1 and r4 == 0:
         is_straight = True
         straight_high = 3
-
-    # Count ranks
-    counts: dict[int, int] = {}
-    for r in ranks:
-        counts[r] = counts.get(r, 0) + 1
-
-    # Classify by counts
-    count_values = sorted(counts.values(), reverse=True)
 
     if is_flush and is_straight:
         return _STRAIGHT_FLUSH + straight_high
 
-    if count_values == [4, 1]:
-        quad_r = [r for r, c in counts.items() if c == 4][0]
-        kick = [r for r, c in counts.items() if c == 1][0]
-        return _FOUR_KIND + quad_r * 15 + kick
+    # Count duplicates based on sorted order.
+    # Since it's sorted, duplicates must be adjacent.
 
-    if count_values == [3, 2]:
-        trip_r = [r for r, c in counts.items() if c == 3][0]
-        pair_r = [r for r, c in counts.items() if c == 2][0]
-        return _FULL_HOUSE + trip_r * 15 + pair_r
+    # 4 of a kind: A A A A B (r0==r3) or A B B B B (r1==r4)
+    if r0 == r3:
+        return _FOUR_KIND + r0 * 15 + r4
+    if r1 == r4:
+        return _FOUR_KIND + r1 * 15 + r0
+
+    # Full house: A A A B B (r0==r2 and r3==r4) or A A B B B (r0==r1 and r2==r4)
+    if r0 == r2 and r3 == r4:
+        return _FULL_HOUSE + r0 * 15 + r3
+    if r0 == r1 and r2 == r4:
+        return _FULL_HOUSE + r2 * 15 + r0
 
     if is_flush:
-        return _FLUSH + ranks[0] * 15**4 + ranks[1] * 15**3 + ranks[2] * 15**2 + ranks[3] * 15 + ranks[4]
+        return _FLUSH + r0 * 15**4 + r1 * 15**3 + r2 * 15**2 + r3 * 15 + r4
 
     if is_straight:
         return _STRAIGHT + straight_high
 
-    if count_values == [3, 1, 1]:
-        trip_r = [r for r, c in counts.items() if c == 3][0]
-        kickers = sorted([r for r, c in counts.items() if c == 1], reverse=True)
-        return _THREE_KIND + trip_r * 15**2 + kickers[0] * 15 + kickers[1]
+    # 3 of a kind: A A A B C (r0==r2), A B B B C (r1==r3), A B C C C (r2==r4)
+    if r0 == r2:
+        return _THREE_KIND + r0 * 15**2 + r3 * 15 + r4
+    if r1 == r3:
+        return _THREE_KIND + r1 * 15**2 + r0 * 15 + r4
+    if r2 == r4:
+        return _THREE_KIND + r2 * 15**2 + r0 * 15 + r1
 
-    if count_values == [2, 2, 1]:
-        pairs = sorted([r for r, c in counts.items() if c == 2], reverse=True)
-        kick = [r for r, c in counts.items() if c == 1][0]
-        return _TWO_PAIR + pairs[0] * 15**2 + pairs[1] * 15 + kick
+    # Two pair: A A B B C (r0==r1, r2==r3), A A B C C (r0==r1, r3==r4), A B B C C (r1==r2, r3==r4)
+    if r0 == r1 and r2 == r3:
+        return _TWO_PAIR + r0 * 15**2 + r2 * 15 + r4
+    if r0 == r1 and r3 == r4:
+        return _TWO_PAIR + r0 * 15**2 + r3 * 15 + r2
+    if r1 == r2 and r3 == r4:
+        return _TWO_PAIR + r1 * 15**2 + r3 * 15 + r0
 
-    if count_values == [2, 1, 1, 1]:
-        pair_r = [r for r, c in counts.items() if c == 2][0]
-        kickers = sorted([r for r, c in counts.items() if c == 1], reverse=True)
-        return _PAIR + pair_r * 15**3 + kickers[0] * 15**2 + kickers[1] * 15 + kickers[2]
+    # Pair: A A B C D (r0==r1), A B B C D (r1==r2), A B C C D (r2==r3), A B C D D (r3==r4)
+    if r0 == r1:
+        return _PAIR + r0 * 15**3 + r2 * 15**2 + r3 * 15 + r4
+    if r1 == r2:
+        return _PAIR + r1 * 15**3 + r0 * 15**2 + r3 * 15 + r4
+    if r2 == r3:
+        return _PAIR + r2 * 15**3 + r0 * 15**2 + r1 * 15 + r4
+    if r3 == r4:
+        return _PAIR + r3 * 15**3 + r0 * 15**2 + r1 * 15 + r2
 
     # High card
-    return _HIGH_CARD + ranks[0] * 15**4 + ranks[1] * 15**3 + ranks[2] * 15**2 + ranks[3] * 15 + ranks[4]
+    return _HIGH_CARD + r0 * 15**4 + r1 * 15**3 + r2 * 15**2 + r3 * 15 + r4
 
 
 class BuiltinEvaluator:
