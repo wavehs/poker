@@ -167,16 +167,16 @@ class PolicyEngine:
                 elif chart_action_type is None and to_call > 0:
                     chart_action_type = ActionType.FOLD
 
-pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
-spr = self.solver.compute_spr(state.effective_stack, state.pot)
-effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
+        pot_odds = self.solver.compute_pot_odds(state.pot, to_call)
+        spr = self.solver.compute_spr(state.effective_stack, state.pot)
+        effective_stack_bb = state.effective_stack / state.big_blind if state.big_blind > 0 else 0.0
 
-# ── Check for short stack push/fold
-if effective_stack_bb <= self.SHORT_STACK_THRESHOLD_BB and state.street == Street.PREFLOP:
-    return self._push_fold_recommendation(
-        equity, hand_strength, pot_odds, spr, effective_stack_bb,
-        state, vision_confidence, ocr_confidence, state_confidence,
-    )
+        # ── Check for short stack push/fold
+        if effective_stack_bb <= self.SHORT_STACK_THRESHOLD_BB and state.street == Street.PREFLOP:
+            return self._push_fold_recommendation(
+                equity, hand_strength, pot_odds, spr, effective_stack_bb,
+                state, vision_confidence, ocr_confidence, state_confidence,
+            )
 
         # ── Score all actions
         style_adj = self.STYLE_ADJUSTMENTS[self.play_style]
