@@ -392,6 +392,10 @@ class EquitySolver:
         if self.enable_cache:
             self._board_cache = {}
 
+        forbidden = [False] * 52
+        for b in board_ints:
+            forbidden[b] = True
+
         for batch_start in range(0, sims, self.step_size):
             batch_end = min(batch_start + self.step_size, sims)
 
@@ -406,9 +410,13 @@ class EquitySolver:
                     # This is slightly faster on average if random_cards_needed is small.
                     # Or we can just resample if we hit one of the 2 opponent cards.
                     sampled_deck: list[int] = []
+                    forbidden[opp_hand[0]] = True
+                    forbidden[opp_hand[1]] = True
+
                     while len(sampled_deck) < random_cards_needed:
                         s = random.choice(deck)
-                        if s not in opp_hand and s not in sampled_deck:
+                        if not forbidden[s]:
+                            forbidden[s] = True
                             sampled_deck.append(s)
 
                     # Inject the opponent hand into sampled_deck to match
@@ -416,6 +424,11 @@ class EquitySolver:
                     # _simulate_once_int draws cards_needed first for the board.
                     board_samples = sampled_deck[:cards_needed]
                     other_opp_samples = sampled_deck[cards_needed:]
+
+                    forbidden[opp_hand[0]] = False
+                    forbidden[opp_hand[1]] = False
+                    for s in sampled_deck:
+                        forbidden[s] = False
 
                     # Construct expected deck: board + opp1 + opp2...
                     custom_deck = board_samples + list(opp_hand) + other_opp_samples
@@ -558,6 +571,10 @@ class EquitySolver:
         if self.enable_cache:
             self._board_cache = {}
 
+        forbidden = [False] * 52
+        for b in board_ints:
+            forbidden[b] = True
+
         for _ in range(sims):
             v_hand = random.choice(valid_v_hands)
 
@@ -567,9 +584,14 @@ class EquitySolver:
 
             # Draw board
             sampled_board: list[int] = []
+
+            forbidden[v_hand[0]] = True
+            forbidden[v_hand[1]] = True
+
             while len(sampled_board) < cards_needed:
                 s = random.choice(deck)
-                if s not in v_hand and s not in sampled_board:
+                if not forbidden[s]:
+                    forbidden[s] = True
                     sampled_board.append(s)
 
             full_board = board_ints + sampled_board
@@ -579,8 +601,7 @@ class EquitySolver:
 
             # Evaluate hero hands
             for h_hand in valid_h_hands:
-                if (h_hand[0] in v_hand or h_hand[1] in v_hand or
-                    h_hand[0] in sampled_board or h_hand[1] in sampled_board):
+                if forbidden[h_hand[0]] or forbidden[h_hand[1]]:
                     continue
 
                 h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
@@ -590,6 +611,12 @@ class EquitySolver:
                 elif h_rank == v_rank:
                     ties[h_hand] += 1
                 totals[h_hand] += 1
+
+            # Reset forbidden state
+            forbidden[v_hand[0]] = False
+            forbidden[v_hand[1]] = False
+            for s in sampled_board:
+                forbidden[s] = False
 
         if self.enable_cache:
             self._board_cache = None
