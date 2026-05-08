@@ -392,6 +392,10 @@ class EquitySolver:
         if self.enable_cache:
             self._board_cache = {}
 
+        forbidden = [False] * 52
+        for b in board_ints:
+            forbidden[b] = True
+
         for batch_start in range(0, sims, self.step_size):
             batch_end = min(batch_start + self.step_size, sims)
 
@@ -413,6 +417,11 @@ class EquitySolver:
                     # _simulate_once_int draws cards_needed first for the board.
                     board_samples = sampled_deck[:cards_needed]
                     other_opp_samples = sampled_deck[cards_needed:]
+
+                    forbidden[opp_hand[0]] = False
+                    forbidden[opp_hand[1]] = False
+                    for s in sampled_deck:
+                        forbidden[s] = False
 
                     # Construct expected deck: board + opp1 + opp2...
                     custom_deck = board_samples + list(opp_hand) + other_opp_samples
