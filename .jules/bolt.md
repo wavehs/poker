@@ -1,7 +1,6 @@
-## 2024-05-18 - Monte Carlo Hot Loop Validation Optimization
-**Learning:** In performance-critical Monte Carlo inner loops (such as `compute_range_vs_range_equity`), constructing a single O(1) `forbidden` set outside the loop for card validation is up to ~4x faster than performing repeated list or tuple membership checks inside the hot loop.
-**Action:** Always pre-calculate sets for exclusion checks outside hot loops where possible, but avoid allocating new collections if the operations to construct them are more expensive than the inner logic itself.
-
-## 2024-05-18 - Monte Carlo Hand Simulation Loop Overheads
-**Learning:** Contrary to intuition, in performance-critical Monte Carlo simulations drawing a small number of cards, using a `while` loop with `random.choice()` and linear membership checks is roughly 2x faster than using `random.sample()` over a dynamically filtered deck (via list comprehension). The cost of iterating the entire 50-card deck to construct the filtered list dominates the small number of collision retries in a `while` loop.
-**Action:** When picking a small subset of items from a list randomly and excluding a few known values, rely on `while` + `random.choice()` with retry logic instead of `random.sample` on a filtered list, especially in tight loops.
+## 2024-05-18 - Monte Carlo Deck Sampling Optimization
+**Learning:** `random.shuffle` over the entire array inside a hot loop is a common but extremely inefficient pattern when only a small portion of the array is needed. In `EquitySolver`, shuffling a 45-card deck for each simulation took significantly longer than just sampling the needed cards. `random.sample` is much faster for drawing hands since it avoids shuffling the entire deck array.
+**Action:** When picking a small subset of elements randomly in a performance-critical loop, use `random.sample` instead of shuffling the whole array and taking a slice.
+## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
+**Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
+**Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
