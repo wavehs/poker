@@ -193,13 +193,47 @@ class BuiltinEvaluator:
         if n == 5:
             return _evaluate_five_int(cards[0], cards[1], cards[2], cards[3], cards[4])
 
-        # 6-7 cards: find best 5-card combination
+        # 6-7 cards: unroll combinations for performance
         best = -1
-        for combo in itertools.combinations(cards, 5):
-            val = _evaluate_five_int(combo[0], combo[1], combo[2], combo[3], combo[4])
-            if val > best:
-                best = val
-        return best
+        if n == 7:
+            c0, c1, c2, c3, c4, c5, c6 = cards
+            val = _evaluate_five_int(c0, c1, c2, c3, c4); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c3, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c3, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c0, c3, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c4, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c1, c3, c4, c5, c6); best = val if val > best else best
+            val = _evaluate_five_int(c2, c3, c4, c5, c6); best = val if val > best else best
+            return best
+        elif n == 6:
+            c0, c1, c2, c3, c4, c5 = cards
+            val = _evaluate_five_int(c0, c1, c2, c3, c4); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c3, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c2, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c1, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c0, c2, c3, c4, c5); best = val if val > best else best
+            val = _evaluate_five_int(c1, c2, c3, c4, c5); best = val if val > best else best
+            return best
+        else:
+            for combo in itertools.combinations(cards, 5):
+                val = _evaluate_five_int(combo[0], combo[1], combo[2], combo[3], combo[4])
+                if val > best:
+                    best = val
+            return best
 
 
 # ─── Eval7 Backend ───────────────────────────────────────────────────────────
