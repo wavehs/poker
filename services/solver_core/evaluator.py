@@ -107,6 +107,74 @@ def _evaluate_five_int(c0: int, c1: int, c2: int, c3: int, c4: int) -> int:
     ranks.sort(reverse=True)
     is_flush = s0 == s1 == s2 == s3 == s4
 
+    # Check straight
+    is_straight = False
+    straight_high = -1
+    if ranks[0] - ranks[4] == 4 and len(set(ranks)) == 5:
+        is_straight = True
+        straight_high = ranks[0]
+    elif ranks == [12, 3, 2, 1, 0]:  # A-2-3-4-5 (wheel)
+        is_straight = True
+        straight_high = 3
+
+    if is_flush and is_straight:
+        return _STRAIGHT_FLUSH + straight_high
+
+    # Unroll rank variables for fast access after sorting
+    r0, r1, r2, r3, r4 = ranks[0], ranks[1], ranks[2], ranks[3], ranks[4]
+
+    # Instead of dictionary counts, check adjacent duplicates since array is sorted
+    if r0 == r3 or r1 == r4:
+        # Four of a kind
+        quad_r = r1  # If r0==r3 or r1==r4, r1 is always part of the quad
+        kick = r4 if r0 == r3 else r0
+        return _FOUR_KIND + quad_r * 15 + kick
+
+    if (r0 == r2 and r3 == r4) or (r0 == r1 and r2 == r4):
+        # Full house
+        trip_r = r0 if r0 == r2 else r4
+        pair_r = r4 if r0 == r2 else r0
+        return _FULL_HOUSE + trip_r * 15 + pair_r
+
+    if is_flush:
+        return _FLUSH + r0 * 15**4 + r1 * 15**3 + r2 * 15**2 + r3 * 15 + r4
+
+    if is_straight:
+        return _STRAIGHT + straight_high
+
+    if r0 == r2 or r1 == r3 or r2 == r4:
+        # Three of a kind
+        if r0 == r2:
+            trip_r, k1, k2 = r0, r3, r4
+        elif r1 == r3:
+            trip_r, k1, k2 = r1, r0, r4
+        else:
+            trip_r, k1, k2 = r2, r0, r1
+        return _THREE_KIND + trip_r * 15**2 + k1 * 15 + k2
+
+    if (r0 == r1 and r2 == r3) or (r0 == r1 and r3 == r4) or (r1 == r2 and r3 == r4):
+        # Two pair
+        if r0 == r1 and r2 == r3:
+            p1, p2, k = r0, r2, r4
+        elif r0 == r1 and r3 == r4:
+            p1, p2, k = r0, r3, r2
+        else:
+            p1, p2, k = r1, r3, r0
+        return _TWO_PAIR + p1 * 15**2 + p2 * 15 + k
+
+    if r0 == r1 or r1 == r2 or r2 == r3 or r3 == r4:
+        # One pair
+        if r0 == r1:
+            return _PAIR + r0 * 15**3 + r2 * 15**2 + r3 * 15 + r4
+        elif r1 == r2:
+            return _PAIR + r1 * 15**3 + r0 * 15**2 + r3 * 15 + r4
+        elif r2 == r3:
+            return _PAIR + r2 * 15**3 + r0 * 15**2 + r1 * 15 + r4
+        else:
+            return _PAIR + r3 * 15**3 + r0 * 15**2 + r1 * 15 + r2
+
+    # High card
+    return _HIGH_CARD + r0 * 15**4 + r1 * 15**3 + r2 * 15**2 + r3 * 15 + r4
     sr0, sr1, sr2, sr3, sr4 = ranks[0], ranks[1], ranks[2], ranks[3], ranks[4]
 
     # Detect duplicates by comparing adjacent sorted elements
