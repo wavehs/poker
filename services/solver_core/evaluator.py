@@ -107,21 +107,23 @@ def _evaluate_five_int(c0: int, c1: int, c2: int, c3: int, c4: int) -> int:
     ranks.sort(reverse=True)
     is_flush = s0 == s1 == s2 == s3 == s4
 
+    # Unroll rank variables for fast access after sorting
+    r0, r1, r2, r3, r4 = ranks[0], ranks[1], ranks[2], ranks[3], ranks[4]
+
     # Check straight
+    # ⚡ Bolt Optimization: Replace `len(set(ranks)) == 5` and `ranks == [...]` with unrolled boolean checks
+    # to avoid object allocations in hot loops.
     is_straight = False
     straight_high = -1
-    if ranks[0] - ranks[4] == 4 and len(set(ranks)) == 5:
+    if r0 - r4 == 4 and r0 != r1 and r1 != r2 and r2 != r3 and r3 != r4:
         is_straight = True
-        straight_high = ranks[0]
-    elif ranks == [12, 3, 2, 1, 0]:  # A-2-3-4-5 (wheel)
+        straight_high = r0
+    elif r0 == 12 and r1 == 3 and r2 == 2 and r3 == 1 and r4 == 0:  # A-2-3-4-5 (wheel)
         is_straight = True
         straight_high = 3
 
     if is_flush and is_straight:
         return _STRAIGHT_FLUSH + straight_high
-
-    # Unroll rank variables for fast access after sorting
-    r0, r1, r2, r3, r4 = ranks[0], ranks[1], ranks[2], ranks[3], ranks[4]
 
     # Instead of dictionary counts, check adjacent duplicates since array is sorted
     if r0 == r3 or r1 == r4:
