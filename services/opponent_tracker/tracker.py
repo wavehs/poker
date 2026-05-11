@@ -7,6 +7,7 @@ that can be injected into the policy layer.
 
 from libs.common.schemas import ActionType, OpponentProfile, Street, TableState
 
+
 class OpponentTracker:
     def __init__(self) -> None:
         # Dictionary storing raw metrics for each seat_id

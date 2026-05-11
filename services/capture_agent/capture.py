@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from libs.common.schemas import ActionType, ActionEvent
+from libs.common.schemas import ActionEvent, ActionType
 
 logger = logging.getLogger(__name__)
 
