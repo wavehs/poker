@@ -7,7 +7,6 @@ from __future__ import annotations
 import base64
 import json
 import time
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -107,7 +106,7 @@ async def get_session_history() -> dict:
 
     history = []
     try:
-        with open(pipeline.session_file, "r") as f:
+        with open(pipeline.session_file) as f:
             for line in f:
                 line = line.strip()
                 if line:

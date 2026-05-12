@@ -1,7 +1,8 @@
 """Tests for Opponent Tracker."""
 
 import pytest
-from libs.common.schemas import ActionType, Street, TableState, PlayerState
+
+from libs.common.schemas import ActionType, PlayerState, Street, TableState
 from services.opponent_tracker.tracker import OpponentTracker
 
 
