@@ -44,7 +44,7 @@ def train(
 
     yolo = YOLO(model)
 
-    results = yolo.train(
+    yolo.train(
         data=data_yaml,
         epochs=epochs,
         batch=batch_size,

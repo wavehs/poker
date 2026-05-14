@@ -3,7 +3,6 @@ Opponent range modelling module.
 Provides default preflop ranges based on opponent play style and
 methods to estimate and narrow range based on streets and actions.
 """
-from typing import List, Set, Tuple
 import itertools
 
 from libs.common.schemas import PlayStyle, Street, TableState
@@ -11,7 +10,7 @@ from services.solver_core.evaluator import RANK_NAMES, SUIT_NAMES, card_to_int
 
 # Default preflop ranges defined as sets of hand string representations
 # Format: "AA" for pairs, "AKs" for suited, "AKo" for offsuit
-RANGES: dict[PlayStyle, Set[str]] = {
+RANGES: dict[PlayStyle, set[str]] = {
     PlayStyle.CONSERVATIVE: {
         "AA", "KK", "QQ", "JJ", "TT", "99",
         "AKs", "AQs", "AJs",
@@ -30,7 +29,7 @@ RANGES: dict[PlayStyle, Set[str]] = {
     },
 }
 
-def estimate_opponent_range(state: TableState, play_style: PlayStyle) -> Set[str]:
+def estimate_opponent_range(state: TableState, play_style: PlayStyle) -> set[str]:
     """
     Estimates the opponent's range based on their play style and the current street.
     Narrows the range as the hand progresses (e.g., folding weaker hands).
@@ -50,7 +49,7 @@ def estimate_opponent_range(state: TableState, play_style: PlayStyle) -> Set[str
 
     return base_range
 
-def range_to_cards(hand_range: Set[str]) -> List[Tuple[int, int]]:
+def range_to_cards(hand_range: set[str]) -> list[tuple[int, int]]:
     """
     Converts a set of hand strings to a list of integer card pairs.
     Each returned tuple contains two integers (0-51) representing specific cards.
@@ -68,7 +67,7 @@ def range_to_cards(hand_range: Set[str]) -> List[Tuple[int, int]]:
 
         elif len(hand_str) == 3:
             # Non-pair: e.g. "AKs", "AKo"
-            r1, r2, type_ = hand_str
+            r1, r2, type_ = hand_str[0], hand_str[1], hand_str[2]
             if r1 not in RANK_NAMES or r2 not in RANK_NAMES:
                 continue
 

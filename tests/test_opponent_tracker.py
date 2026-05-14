@@ -1,7 +1,8 @@
 """Tests for Opponent Tracker."""
 
 import pytest
-from libs.common.schemas import ActionType, Street, TableState, PlayerState
+
+from libs.common.schemas import ActionType, PlayerState, Street, TableState
 from services.opponent_tracker.tracker import OpponentTracker
 
 
@@ -91,21 +92,76 @@ def test_reset_session(tracker):
     assert stats["pfr_this_hand"] is False
 
 
-def test_sizing_tells(tracker):
-    player = PlayerState(seat=5, is_hero=False, is_active=True, last_action=ActionType.RAISE, bet=25.0)
+def test_hands_played_only_for_active_seats(tracker):
+    """Regression: `hands_played` previously incremented for every seat ever
+    seen, even those who had left the table. Only currently-active opponents
+    must accrue the counter when a new hand starts.
+    """
+    p1 = PlayerState(seat=1, is_hero=False, is_active=True, last_action=ActionType.CALL, bet=5.0)
+    p2 = PlayerState(seat=2, is_hero=False, is_active=True, last_action=ActionType.CALL, bet=5.0)
+    state1 = TableState(
+        is_hand_in_progress=True,
+        street=Street.FLOP,
+        pot=20.0,
+        players=[p1, p2],
+    )
+    tracker.update(state1)
+    assert tracker.profiles_raw[1]["hands_played"] == 0
+    assert tracker.profiles_raw[2]["hands_played"] == 0
+
+    # Seat 2 leaves the table. Start a new hand with only seat 1 active.
+    p1_new = PlayerState(seat=1, is_hero=False, is_active=True)
+    state2 = TableState(
+        is_hand_in_progress=True,
+        street=Street.PREFLOP,
+        pot=1.5,
+        players=[p1_new],
+    )
+    tracker.update(state2)
+
+    # Seat 1 was active for the new hand → bumped. Seat 2 was not present → not bumped.
+    assert tracker.profiles_raw[1]["hands_played"] == 1
+    assert tracker.profiles_raw[2]["hands_played"] == 0
+
+
+def test_three_bet_requires_prior_aggressor(tracker):
+    """A 3-bet must follow an observed preflop raise from another seat.
+
+    A single isolated raise is just an open-raise, not a 3-bet, so the
+    `three_bet_opps` and `three_bets` counters should remain at zero.
+    """
+    aggressor = PlayerState(
+        seat=5, is_hero=False, is_active=True, last_action=ActionType.RAISE, bet=3.0
+    )
     state = TableState(
         is_hand_in_progress=True,
         street=Street.PREFLOP,
-        pot=30.0,
+        pot=4.0,
         big_blind=1.0,
-        players=[player]
+        players=[aggressor],
     )
     tracker.update(state)
 
     stats = tracker.profiles_raw[5]
-    assert stats["three_bet_opps"] == 1
-    assert stats["three_bets"] == 1
-    assert player.profile.three_bet_pct == 1.0
+    assert stats["three_bet_opps"] == 0
+    assert stats["three_bets"] == 0
+
+    # Now a second seat faces the open and 3-bets.
+    three_bettor = PlayerState(
+        seat=6, is_hero=False, is_active=True, last_action=ActionType.RAISE, bet=9.0
+    )
+    state2 = TableState(
+        is_hand_in_progress=True,
+        street=Street.PREFLOP,
+        pot=12.0,
+        big_blind=1.0,
+        players=[aggressor, three_bettor],
+    )
+    tracker.update(state2)
+
+    stats6 = tracker.profiles_raw[6]
+    assert stats6["three_bet_opps"] == 1
+    assert stats6["three_bets"] == 1
 
 
 class TestOpponentTracker:

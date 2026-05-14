@@ -60,7 +60,9 @@ class VisionDetector:
         self.model_path = model_path
         self.confidence_threshold = confidence_threshold
         self.device = device
-        self._model = None
+        # `Any` here is deliberate — `ultralytics.YOLO` is optional at runtime
+        # and we don't want to require it for type-checking.
+        self._model: object | None = None
         self._mock_mode = model_path is None
 
         # Metrics
@@ -80,6 +82,9 @@ class VisionDetector:
 
     def _load_model(self) -> None:
         """Load YOLO model from weights."""
+        if self.model_path is None:
+            self._mock_mode = True
+            return
         try:
             from ultralytics import YOLO
 
@@ -146,7 +151,9 @@ class VisionDetector:
             return []
 
         try:
-            results = self._model.predict(
+            model = self._model
+            assert model is not None
+            results = model.predict(  # type: ignore[attr-defined]
                 frame,
                 conf=self.confidence_threshold,
                 device=self.device,
@@ -167,7 +174,9 @@ class VisionDetector:
             return [[] for _ in frames]
 
         try:
-            results = self._model.predict(
+            model = self._model
+            assert model is not None
+            results = model.predict(  # type: ignore[attr-defined]
                 frames,
                 conf=self.confidence_threshold,
                 device=self.device,

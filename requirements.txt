@@ -14,9 +14,10 @@ ultralytics>=8.3.0
 mss>=9.0.0
 dxcam>=0.4.0; sys_platform == "win32"
 
-# OCR
-paddlepaddle>=2.6.0
-paddleocr>=2.8.0
+# OCR — heavy dependencies live in requirements-ocr.txt.
+# The OCR backend gracefully falls back to a mock/no-op when paddleocr is
+# not installed, so they are optional for development. To enable real OCR:
+#   pip install -r requirements-ocr.txt
 
 # Fast hand evaluators (Phase 3)
 # eval7>=0.1.9  # Optional: requires C compiler (Cython). Install manually if available.

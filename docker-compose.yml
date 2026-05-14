@@ -1,5 +1,4 @@
-version: "3.9"
-
+# Compose v2+: the top-level `version` key is obsolete and ignored.
 services:
   api:
     build:
@@ -11,6 +10,12 @@ services:
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
+      # Restrict CORS to the local UI by default. Override at deploy time.
+      - POKER_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - POKER_SESSIONS_DIR=/app/data/sessions
+      # 10 MiB per frame, 16 frames per sequence.
+      - POKER_MAX_IMAGE_BYTES=10485760
+      - POKER_MAX_SEQUENCE_LEN=16
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

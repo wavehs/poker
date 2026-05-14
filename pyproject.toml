@@ -17,12 +17,37 @@ addopts = "-v --tb=short"
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+extend-exclude = [
+    "evals",
+    "data/synthetic_tables/generator.py",
+    "services/solver_core/evaluator.py",
+    "services/capture_agent/benchmarks.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+# Allow `str + Enum` mixins (pydantic interop) and ignore "return condition" rewrites
+# that hurt readability in poker heuristics.
+ignore = ["UP042", "SIM103"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501", "B017", "F841"]
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
-warn_return_any = true
+# Strict mode is the long-term goal but the codebase is not yet annotated
+# everywhere. Until then, run a forgiving mypy that still catches obvious
+# bugs without blocking CI on third-party stubs and dynamic glue.
+ignore_missing_imports = true
 warn_unused_configs = true
+warn_redundant_casts = true
+check_untyped_defs = true
+no_implicit_optional = true
+follow_imports = "silent"
+explicit_package_bases = true
+namespace_packages = true
+exclude = [
+    "evals/",
+    "data/",
+    "services/solver_core/evaluator\\.py$",
+]

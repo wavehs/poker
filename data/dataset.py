@@ -107,7 +107,6 @@ def generate_synthetic_frame(
     suit_colors = [(0, 0, 0), (0, 0, 200), (0, 0, 200), (0, 0, 0)]
 
     card_w, card_h = int(width * 0.04), int(height * 0.1)
-    used_positions: list[tuple[int, int]] = []
 
     for i in range(min(num_cards, 7)):
         if i < 2:

@@ -7,6 +7,7 @@ Maintains file-based loading for testing and replay.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 import time
@@ -16,7 +17,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from libs.common.schemas import ActionType, ActionEvent
+from libs.common.schemas import ActionEvent, ActionType
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,14 @@ if sys.platform == "win32":
 try:
     import mss as _mss_mod  # noqa: F401
 
-    _MSS_AVAILABLE = True
+    # `mss` may import cleanly but fail at runtime when its native screen
+    # provider (e.g. libxcb on headless Linux) is unavailable. Probe once.
+    try:
+        with _mss_mod.mss():
+            _MSS_AVAILABLE = True
+    except Exception as _mss_probe_err:  # noqa: BLE001
+        logger.debug("mss probe failed, treating as unavailable: %s", _mss_probe_err)
+        _MSS_AVAILABLE = False
 except ImportError:
     pass
 
@@ -231,10 +239,8 @@ class CaptureAgent:
     def release(self) -> None:
         """Release backend resources."""
         if self._dxcam_camera is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._dxcam_camera.stop()
-            except Exception:
-                pass
             self._dxcam_camera = None
             logger.info("DXcam camera released")
 

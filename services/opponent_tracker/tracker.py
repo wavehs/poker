@@ -7,6 +7,7 @@ that can be injected into the policy layer.
 
 from libs.common.schemas import ActionType, OpponentProfile, Street, TableState
 
+
 class OpponentTracker:
     def __init__(self) -> None:
         # Dictionary storing raw metrics for each seat_id
@@ -19,6 +20,10 @@ class OpponentTracker:
         self.last_community_cards_count = 0
         # Now keyed by (seat_id, street) to allow same actions on different streets
         self.last_observed_action: dict[tuple[int, Street], ActionType | None] = {}
+
+        # Hand-level state (reset on each new hand)
+        # Seat of the most recent preflop aggressor (open-raiser).
+        self.preflop_aggressor_seat: int | None = None
 
     def _init_seat(self, seat: int) -> None:
         if seat not in self.profiles_raw:
@@ -38,43 +43,51 @@ class OpponentTracker:
             }
 
     def _detect_new_hand(self, state: TableState) -> bool:
-        """Detect if a new hand has started based on board state changes."""
-        is_new_hand = False
+        """Detect whether a new hand started since the last update.
 
-        # Heuristics for a new hand:
-        # 1. Street goes backwards (e.g., Flop -> Preflop)
+        Heuristics:
+          1. The street regresses to PREFLOP from a postflop street.
+          2. The community-card count drops to zero from non-zero (board reset).
+          3. The pot resets below the big blind from a non-trivial previous pot.
+        """
         street_order = {
             Street.UNKNOWN: -1,
             Street.PREFLOP: 0,
             Street.FLOP: 1,
             Street.TURN: 2,
             Street.RIVER: 3,
-            Street.SHOWDOWN: 4
+            Street.SHOWDOWN: 4,
         }
+        current = street_order.get(state.street, -1)
+        last = street_order.get(self.last_street, -1)
 
-        current_street_val = street_order.get(state.street, -1)
-        last_street_val = street_order.get(self.last_street, -1)
+        if last >= 1 and current == 0:
+            return True
 
-        if current_street_val < last_street_val and current_street_val == 0:
-            is_new_hand = True
+        if self.last_community_cards_count > 0 and len(state.community_cards) == 0:
+            return True
 
-        # 2. Community cards decrease
-        if len(state.community_cards) < self.last_community_cards_count:
-            is_new_hand = True
+        bb = max(state.big_blind, 1.0)
+        if self.last_pot > bb * 3 and state.pot <= bb:
+            return True
 
-        # 3. Pot drops significantly
-        if state.pot < self.last_pot and state.pot < 10.0 and self.last_pot > 0:
-            is_new_hand = True
+        return False
 
-        return is_new_hand
+    def _reset_hand_state(self, state: TableState) -> None:
+        """Reset internal trackers for a new hand.
 
-    def _reset_hand_state(self) -> None:
-        """Reset internal trackers for a new hand."""
+        Only seats that are currently active at the table are credited with a
+        new hand played. Seats that have left the table no longer accumulate
+        hands they didn't actually play.
+        """
         self.last_observed_action.clear()
+        active_seats = {p.seat for p in state.players if p.is_active and not p.is_hero}
         for seat, stats in self.profiles_raw.items():
-            stats["hands_played"] += 1
+            if seat in active_seats:
+                stats["hands_played"] += 1
             stats["vpip_this_hand"] = False
             stats["pfr_this_hand"] = False
+        self.preflop_aggressor_seat = None
 
     def update(self, state: TableState) -> None:
         """
@@ -84,7 +97,13 @@ class OpponentTracker:
             return  # Wait until a hand actually begins
 
         if self._detect_new_hand(state):
-            self._reset_hand_state()
+            self._reset_hand_state(state)
+
+        # Ensure every currently-active villain has a profile entry so the
+        # per-hand reset above doesn't miss new arrivals.
+        for p in state.players:
+            if not p.is_hero and p.seat is not None:
+                self._init_seat(p.seat)
 
         self.last_pot = state.pot
         self.last_street = state.street
@@ -106,28 +125,43 @@ class OpponentTracker:
 
                 # Update stats
                 if state.street == Street.PREFLOP:
-                    if action in (ActionType.CALL, ActionType.BET, ActionType.RAISE, ActionType.ALL_IN):
-                        if not stats["vpip_this_hand"]:
-                            stats["vpip_this_hand"] = True
-                            stats["vpip_hands"] += 1
+                    voluntary = (
+                        ActionType.CALL,
+                        ActionType.BET,
+                        ActionType.RAISE,
+                        ActionType.ALL_IN,
+                    )
+                    if action in voluntary and not stats["vpip_this_hand"]:
+                        stats["vpip_this_hand"] = True
+                        stats["vpip_hands"] += 1
 
-                    if action in (ActionType.RAISE, ActionType.ALL_IN):
-                        if not stats["pfr_this_hand"]:
-                            stats["pfr_this_hand"] = True
-                            stats["pfr_hands"] += 1
+                    if (
+                        action in (ActionType.RAISE, ActionType.ALL_IN)
+                        and not stats["pfr_this_hand"]
+                    ):
+                        stats["pfr_this_hand"] = True
+                        stats["pfr_hands"] += 1
 
-                    # Basic 3-bet logic: If there was a previous raise by someone else
-                    # and this player raises again preflop.
-                    # We will simplify: If the pot is big enough preflop, and they raise,
-                    # we'll approximate it as a 3-bet opportunity.
-                    if p.bet > 0 and state.pot > state.big_blind * 2:
+                    # 3-bet: a different seat re-raises after a prior open.
+                    is_aggression = action in (ActionType.RAISE, ActionType.ALL_IN)
+                    prior_aggressor = self.preflop_aggressor_seat
+                    facing_open = prior_aggressor is not None and prior_aggressor != p.seat
+                    if facing_open:
                         stats["three_bet_opps"] += 1
-                        if action in (ActionType.RAISE, ActionType.ALL_IN):
+                        if is_aggression:
                             stats["three_bets"] += 1
+                    if is_aggression:
+                        # This seat is now the most recent preflop aggressor.
+                        self.preflop_aggressor_seat = p.seat
 
-                # C-Bet basic heuristics: if flop/turn, someone bets
-                if state.street in (Street.FLOP, Street.TURN, Street.RIVER) and state.pot > 0:
-                    # If hero is facing a bet, it's a c-bet scenario approx
+                # C-Bet: count only when this seat was NOT the preflop
+                # aggressor and is now facing a flop bet from someone else.
+                if (
+                    state.street == Street.FLOP
+                    and self.preflop_aggressor_seat is not None
+                    and self.preflop_aggressor_seat != p.seat
+                    and p.bet > 0
+                ):
                     stats["faced_cbet"] += 1
                     if action == ActionType.FOLD:
                         stats["folded_to_cbet"] += 1
@@ -182,7 +216,7 @@ class OpponentTracker:
         if hands < 5:
             return []
 
-        exploits = []
+        exploits: list[dict[str, str | float]] = []
 
         # 1. cbet_always: Exploit players who fold too much to c-bets
         faced_cbet = int(stats.get("faced_cbet", 0))

@@ -9,10 +9,23 @@ Endpoints:
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routes import router
+
+
+def _parse_origins(value: str) -> list[str]:
+    return [o.strip() for o in value.split(",") if o.strip()]
+
+
+# Comma-separated list of allowed origins. Defaults to the local dev UI.
+# A literal "*" disables credentials (browsers reject "*" + credentials).
+_origins_env = os.environ.get("POKER_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+ALLOWED_ORIGINS = _parse_origins(_origins_env)
+ALLOW_CREDENTIALS = "*" not in ALLOWED_ORIGINS
 
 app = FastAPI(
     title="Poker Helper API",
@@ -22,14 +35,12 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# ── CORS (allow UI access)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
-# ── Routes
 app.include_router(router)

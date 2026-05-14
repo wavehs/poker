@@ -73,10 +73,7 @@ class OCREngine:
             if det.detection_class not in self.TEXT_CLASSES:
                 continue
 
-            if self._use_real_ocr:
-                ocr = self._real_ocr(frame, det)
-            else:
-                ocr = self._mock_ocr(det)
+            ocr = self._real_ocr(frame, det) if self._use_real_ocr else self._mock_ocr(det)
 
             if ocr is not None:
                 results.append(ocr)
@@ -154,41 +151,26 @@ class OCREngine:
         if field_type in ("pot", "stack", "bet", "blind"):
             best_text = self._clean_numeric(best_text)
 
+        confidence = min(1.0, best_conf + self.confidence_boost)
+        low_confidence = confidence < 0.6
+
+        # Validate numeric range / shape for money fields. Rather than dropping
+        # the result outright (which deletes context downstream consumers need
+        # to handle gracefully), keep it and flag low_confidence.
+        if field_type in ("pot", "stack", "bet", "blind"):
             try:
-                val = float(best_text)
-                if not (0 <= val <= 1_000_000):
+                num_val = float(best_text)
+                if not (0 <= num_val <= 10_000_000):
+                    low_confidence = True
                     logger.warning(
                         "OCR validation failed: [%s] value %s out of bounds",
                         field_type,
                         best_text,
                     )
-                    return None
-            except ValueError:
-                logger.warning(
-                    "OCR validation failed: [%s] value '%s' is not numeric",
-                    field_type,
-                    best_text,
-                )
-                return None
-
-        confidence = min(1.0, best_conf + self.confidence_boost)
-
-        low_confidence = confidence < 0.6
-
-        if not low_confidence and field_type in ("pot", "bet"):
-            try:
-                num_val = float(best_text)
-                if num_val < 0 or num_val > 10_000_000:
-                    low_confidence = True
-                    logger.warning(
-                        "Validation failed for %s: %s is out of range [0, 10_000_000]",
-                        field_type,
-                        num_val,
-                    )
             except ValueError:
                 low_confidence = True
                 logger.warning(
-                    "Validation failed for %s: %s is not a valid number",
+                    "OCR validation failed: [%s] value '%s' is not numeric",
                     field_type,
                     best_text,
                 )

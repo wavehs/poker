@@ -19,9 +19,9 @@ from libs.common.schemas import (
     TableState,
 )
 from services.policy_layer.preflop_charts import get_preflop_action
-from services.solver_core.calculator import calculate_spr, get_spr_advice
-from services.solver_core.solver import EquitySolver
 from services.policy_layer.range_models import estimate_opponent_range, range_to_cards
+from services.solver_core.calculator import get_spr_advice
+from services.solver_core.solver import EquitySolver
 
 
 class PolicyEngine:
@@ -184,10 +184,19 @@ class PolicyEngine:
         # Adjust style based on opponent profiles
         # Performance impact: Minimal overhead. Iterating over max 9 players is O(1) conceptually.
         # This allows hero to adjust to exploit table dynamics.
-        active_opponents = [p for p in state.players if not p.is_hero and p.is_active and p.profile is not None]
+        active_opponents = [
+            p for p in state.players
+            if not p.is_hero and p.is_active and p.profile is not None
+        ]
         if active_opponents:
-            avg_vpip = sum(p.profile.vpip for p in active_opponents if p.profile is not None) / len(active_opponents)
-            avg_af = sum(p.profile.af for p in active_opponents if p.profile is not None) / len(active_opponents)
+            avg_vpip = (
+                sum(p.profile.vpip for p in active_opponents if p.profile is not None)
+                / len(active_opponents)
+            )
+            avg_af = (
+                sum(p.profile.af for p in active_opponents if p.profile is not None)
+                / len(active_opponents)
+            )
 
             # If opponents are very loose and aggressive, tighten up slightly
             if avg_vpip > 0.4 or avg_af > 2.0:
@@ -237,15 +246,27 @@ class PolicyEngine:
     def _get_spr_advice(self, spr: float) -> str:
         """Get textual advice based on SPR thresholds."""
         if spr < 1:
-            return "SPR < 1: Автоматическое выставление (Commitment). Банк привязан, готовы к олл-ину."
+            return (
+                "SPR < 1: Автоматическое выставление (Commitment). "
+                "Банк привязан, готовы к олл-ину."
+            )
         elif spr < 4:
             return "SPR < 4: Низкий SPR. Идеально для топ-пар и оверпар."
         elif spr < 10:
-            return "SPR < 10: Средний SPR. Пространство для маневра, подходят сильные дро и две пары."
+            return (
+                "SPR < 10: Средний SPR. Пространство для маневра, "
+                "подходят сильные дро и две пары."
+            )
         elif spr < 20:
-            return "SPR < 20: Высокий SPR. Ценятся спекулятивные руки (сет-майнинг, одномастные коннекторы)."
+            return (
+                "SPR < 20: Высокий SPR. Ценятся спекулятивные руки "
+                "(сет-майнинг, одномастные коннекторы)."
+            )
         else:
-            return "SPR >= 20: Глубокие стеки. Играем от потенциальных оддсов (Implied odds)."
+            return (
+                "SPR >= 20: Глубокие стеки. "
+                "Играем от потенциальных оддсов (Implied odds)."
+            )
 
     def _score_actions(
         self,

@@ -1,0 +1,59 @@
+# VCS / CI
+.git
+.gitignore
+.github
+.gitattributes
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+dist
+build
+
+# Virtual environments
+.venv
+venv
+env
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Tests, docs, scripts not needed in the image
+tests
+evals
+docs
+*.md
+
+# Local data and trained models
+data/raw_frames/*.png
+data/raw_frames/*.jpg
+data/sample_frames/*.png
+data/sample_frames/*.jpg
+data/synthetic_tables/output/
+data/sessions/
+models
+*.pt
+*.onnx
+*.engine
+logs
+
+# Node/UI tooling
+node_modules
+apps/ui/dist
