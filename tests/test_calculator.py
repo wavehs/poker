@@ -1,6 +1,7 @@
 """Tests for SPR calculator and advice."""
 
 import math
+
 from services.solver_core.calculator import calculate_spr, get_spr_advice
 
 

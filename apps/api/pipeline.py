@@ -23,9 +23,9 @@ from libs.common.schemas_ext import StageTimings
 from services.capture_agent.capture import CaptureAgent
 from services.explainer.explainer import Explainer
 from services.ocr_core.ocr import OCREngine
+from services.opponent_tracker.tracker import OpponentTracker
 from services.policy_layer.policy import PolicyEngine
 from services.state_engine.engine import StateEngine
-from services.opponent_tracker.tracker import OpponentTracker
 from services.vision_core.detector import VisionDetector
 from services.vision_core.tracker import ObjectTracker
 
