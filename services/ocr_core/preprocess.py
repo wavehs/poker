@@ -139,7 +139,9 @@ def _denoise(gray: np.ndarray, strength: int = 5) -> np.ndarray:
     """Non-local means denoising."""
     if gray.size == 0:
         return gray
-    return cv2.fastNlMeansDenoising(gray, None, h=strength, templateWindowSize=7, searchWindowSize=21)
+    return cv2.fastNlMeansDenoising(
+        gray, None, h=strength, templateWindowSize=7, searchWindowSize=21
+    )
 
 
 def _auto_invert(gray: np.ndarray) -> np.ndarray:
@@ -181,7 +183,7 @@ def _resize_height(gray: np.ndarray, target_height: int) -> np.ndarray:
 def _pad(gray: np.ndarray, px: int = 4) -> np.ndarray:
     """Add white padding around the image."""
     return cv2.copyMakeBorder(
-        gray, px, px, px, px, cv2.BORDER_CONSTANT, value=255
+        gray, px, px, px, px, cv2.BORDER_CONSTANT, value=[255]
     )
 
 

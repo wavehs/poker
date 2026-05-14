@@ -1,5 +1,6 @@
-import time
 import random
+import time
+
 
 class MockDetection:
     def __init__(self, id_val):

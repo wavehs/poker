@@ -1,3 +1,13 @@
-# Optional OCR fallback — EasyOCR
-# Install only if PaddleOCR is unavailable or as secondary backend
+# Optional OCR backends.
+#
+# PaddleOCR is the preferred backend (highest accuracy). EasyOCR is a
+# lightweight secondary backend used as a fallback when PaddleOCR is
+# unavailable. Both are optional — without them the OCR engine returns
+# empty results, which the rest of the pipeline tolerates.
+#
+# Install:
+#   pip install -r requirements-ocr.txt
+
+paddlepaddle>=2.6.0
+paddleocr>=2.8.0
 easyocr>=1.7.0

@@ -219,7 +219,7 @@ class TestBackendResolution:
 
 
 @pytest.mark.skipif(
-    not CaptureAgent(source="mss").backend == "mss",
+    CaptureAgent(source="mss").backend != "mss",
     reason="MSS not available",
 )
 class TestMSSCapture:

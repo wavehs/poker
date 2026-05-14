@@ -1,5 +1,7 @@
 """Tests for Hand Evaluator abstraction and backends."""
 
+import contextlib
+
 import pytest
 
 from services.solver_core.evaluator import (
@@ -156,14 +158,10 @@ class TestCrossValidation:
 
     def _get_all_evaluators(self) -> list[HandEvaluator]:
         evs = [BuiltinEvaluator()]
-        try:
+        with contextlib.suppress(Exception):
             evs.append(get_evaluator_by_name("eval7"))
-        except (ImportError, Exception):
-            pass
-        try:
+        with contextlib.suppress(Exception):
             evs.append(get_evaluator_by_name("treys"))
-        except (ImportError, Exception):
-            pass
         return evs
 
     def test_all_evaluators_agree_on_order(self):

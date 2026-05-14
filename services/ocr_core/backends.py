@@ -219,16 +219,16 @@ def create_backend(
         return MockOCRBackend()
 
     if name == "paddle":
-        b = PaddleOCRBackend(use_gpu=use_gpu, lang=lang)
-        if b.is_available:
-            return b
+        paddle = PaddleOCRBackend(use_gpu=use_gpu, lang=lang)
+        if paddle.is_available:
+            return paddle
         logger.warning("PaddleOCR unavailable, falling back to EasyOCR")
         name = "easyocr"
 
     if name == "easyocr":
-        b = EasyOCRBackend(use_gpu=use_gpu, lang=[lang])
-        if b.is_available:
-            return b
+        easy = EasyOCRBackend(use_gpu=use_gpu, lang=[lang])
+        if easy.is_available:
+            return easy
         logger.warning("EasyOCR unavailable, falling back to Mock")
         return MockOCRBackend()
 

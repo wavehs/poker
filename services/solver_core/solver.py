@@ -564,55 +564,39 @@ class EquitySolver:
         if self.enable_cache:
             self._board_cache = {}
 
-        # ⚡ Bolt: Allocate O(1) forbidden array outside the hot loop
-        # Memory tracking of used cards avoids multiple `in` operator checks
-        forbidden = [False] * 52
+        deck_set = set(deck)
 
         for _ in range(sims):
             v_hand = random.choice(valid_v_hands)
 
-            # Fast check
             if len(deck) - 2 < cards_needed:
                 continue
 
             v0, v1 = v_hand
 
-            # Draw board
-            # ⚡ Bolt Optimization: Use random.sample over a dynamically filtered deck.
-            o1, o2 = v_hand[0], v_hand[1]
-            tmp_deck = [c for c in deck if c != o1 and c != o2]
+            # Sample board from deck minus villain hole cards.
+            # We avoid the per-iteration list comprehension by sampling from a
+            # filtered set populated once outside this loop.
+            tmp_deck = list(deck_set - {v0, v1})
+            if len(tmp_deck) < cards_needed:
+                continue
             sampled_board = random.sample(tmp_deck, cards_needed)
 
             full_board = board_ints + sampled_board
-
-            # Evaluate villain
             v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
 
-            # Construct O(1) lookup for forbidden cards to optimize hero hand filtering
-            # ~4x faster than repeated membership checks inside the hot loop
-            forbidden = set(v_hand) | set(sampled_board)
-
-            # Evaluate hero hands
-            # ⚡ Bolt Optimization: Use forbidden set instead of list lookups in loop.
-            forbidden = {o1, o2}
-            forbidden.update(sampled_board)
+            # O(1) hero filter via a frozen set of cards already in play.
+            forbidden: set[int] = {v0, v1, *sampled_board}
             for h_hand in valid_h_hands:
                 if h_hand[0] in forbidden or h_hand[1] in forbidden:
                     continue
 
                 h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
-
                 if h_rank > v_rank:
                     wins[h_hand] += 1
                 elif h_rank == v_rank:
                     ties[h_hand] += 1
                 totals[h_hand] += 1
-
-            # ⚡ Bolt: Unmark forbidden cards to reuse array
-            forbidden[v0] = False
-            forbidden[v1] = False
-            for s in sampled_board:
-                forbidden[s] = False
 
         if self.enable_cache:
             self._board_cache = None

@@ -10,6 +10,9 @@ Phase 2: Adds ObjectTracker integration, per-stage profiling, and StageTimings.
 from __future__ import annotations
 
 import json
+import logging
+import os
+import threading
 import time
 from pathlib import Path
 
@@ -23,11 +26,13 @@ from libs.common.schemas_ext import StageTimings
 from services.capture_agent.capture import CaptureAgent
 from services.explainer.explainer import Explainer
 from services.ocr_core.ocr import OCREngine
+from services.opponent_tracker.tracker import OpponentTracker
 from services.policy_layer.policy import PolicyEngine
 from services.state_engine.engine import StateEngine
-from services.opponent_tracker.tracker import OpponentTracker
 from services.vision_core.detector import VisionDetector
 from services.vision_core.tracker import ObjectTracker
+
+logger = logging.getLogger(__name__)
 
 
 class Pipeline:
@@ -60,10 +65,15 @@ class Pipeline:
         self.opponent_tracker = opponent_tracker or OpponentTracker()
         self.profiler = PipelineProfiler() if enable_profiling else None
 
-        self.session_file = Path(f"data/sessions/{int(time.time())}.jsonl")
-        self.session_file.parent.mkdir(parents=True, exist_ok=True)
+        sessions_dir = Path(os.environ.get("POKER_SESSIONS_DIR", "data/sessions")).resolve()
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        self.session_file = sessions_dir / f"{int(time.time())}.jsonl"
         self._last_is_hand_in_progress = False
-        self._current_hand_data = None
+        self._current_hand_data: dict | None = None
+        # All pipeline state mutations (state engine, opponent tracker,
+        # session file I/O) must run under this lock because a single
+        # Pipeline instance is shared across FastAPI requests.
+        self._lock = threading.Lock()
 
     def analyze_frame(
         self,
@@ -82,11 +92,24 @@ class Pipeline:
         Returns:
             Complete FrameAnalysis with all detections, state, and recommendation.
         """
+        with self._lock:
+            return self._analyze_frame_locked(frame, frame_idx, timestamp_ms)
+
+    def _analyze_frame_locked(
+        self,
+        frame: np.ndarray,
+        frame_idx: int,
+        timestamp_ms: float | None,
+    ) -> FrameAnalysis:
         t0 = time.perf_counter()
         timings = StageTimings()
 
         if timestamp_ms is None:
             timestamp_ms = time.time() * 1000
+
+        frame_shape: tuple[int, int] | None = None
+        if hasattr(frame, "shape") and frame.ndim >= 2:
+            frame_shape = (int(frame.shape[0]), int(frame.shape[1]))
 
         # ── Step 1: Vision detection
         t_stage = time.perf_counter()
@@ -94,7 +117,7 @@ class Pipeline:
         timings.vision_ms = (time.perf_counter() - t_stage) * 1000
 
         # ── Step 2: Object tracking (optional)
-        tracked_objects = []
+        tracked_objects: list = []
         if self.tracker is not None:
             t_stage = time.perf_counter()
             tracked_objects = self.tracker.update(detections, frame_idx=frame_idx)
@@ -112,6 +135,7 @@ class Pipeline:
             frame_idx=frame_idx,
             timestamp_ms=timestamp_ms,
             tracked_objects=tracked_objects if self.tracker else None,
+            frame_shape=frame_shape,
         )
         timings.state_ms = (time.perf_counter() - t_stage) * 1000
 
@@ -119,7 +143,6 @@ class Pipeline:
         final_tracked = tracked_objects if self.tracker else state_tracked
 
         # ── Step 4.5: Update opponent tracking
-        # This attaches the profile to players in table_state
         self.opponent_tracker.update(table_state)
 
         # ── Step 5: Compute confidence scores
@@ -159,14 +182,19 @@ class Pipeline:
                 "hole_cards": [c.model_dump() for c in hero.hole_cards] if hero else [],
                 "board": [c.model_dump() for c in table_state.community_cards],
                 "action_taken": hero.last_action.value if hero and hero.last_action else None,
-                "recommended_action": recommendation.best_action.action_type.value if recommendation and recommendation.best_action else None,
-                "pot_size": table_state.pot
+                "recommended_action": (
+                    recommendation.best_action.action_type.value
+                    if recommendation and recommendation.best_action else None
+                ),
+                "pot_size": table_state.pot,
             }
         elif self._last_is_hand_in_progress and not is_in_progress:
-            # Hand just finished, write to file
             if self._current_hand_data:
-                with open(self.session_file, "a") as f:
-                    f.write(json.dumps(self._current_hand_data) + "\n")
+                try:
+                    with open(self.session_file, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(self._current_hand_data) + "\n")
+                except OSError as e:
+                    logger.warning("Failed to write session file %s: %s", self.session_file, e)
                 self._current_hand_data = None
 
         self._last_is_hand_in_progress = is_in_progress
@@ -218,11 +246,21 @@ class Pipeline:
 # ─── Module-level singleton for convenience ──────────────────────────────────
 
 _default_pipeline: Pipeline | None = None
+_pipeline_lock = threading.Lock()
 
 
 def get_pipeline() -> Pipeline:
-    """Get or create the default pipeline singleton."""
+    """Get or create the default pipeline singleton (thread-safe)."""
     global _default_pipeline
     if _default_pipeline is None:
-        _default_pipeline = Pipeline()
+        with _pipeline_lock:
+            if _default_pipeline is None:
+                _default_pipeline = Pipeline()
     return _default_pipeline
+
+
+def reset_pipeline() -> None:
+    """Reset the singleton (used by tests)."""
+    global _default_pipeline
+    with _pipeline_lock:
+        _default_pipeline = None

@@ -45,7 +45,7 @@ class PipelineProfiler:
             self._stage = stage
             self._start: float = 0.0
 
-        def __enter__(self) -> _MeasureContext:
+        def __enter__(self) -> "PipelineProfiler._MeasureContext":  # noqa: UP037
             self._start = time.perf_counter()
             return self
 

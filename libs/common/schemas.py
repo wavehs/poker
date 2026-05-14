@@ -154,11 +154,15 @@ class Card(BaseModel):
 
 class OpponentProfile(BaseModel):
     """Per-session statistics for an opponent."""
-    vpip: float = Field(default=0.0, ge=0.0, le=1.0, description="Voluntarily Put In Pot percentage")
+    vpip: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Voluntarily Put In Pot percentage"
+    )
     pfr: float = Field(default=0.0, ge=0.0, le=1.0, description="Preflop Raise percentage")
     af: float = Field(default=0.0, ge=0.0, description="Aggression Factor: (Bet + Raise) / Call")
     three_bet_pct: float = Field(default=0.0, ge=0.0, le=1.0, description="3-bet percentage")
-    fold_to_cbet_pct: float = Field(default=0.0, ge=0.0, le=1.0, description="Fold to continuation bet percentage")
+    fold_to_cbet_pct: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Fold to continuation bet percentage"
+    )
     hands_played: int = Field(default=0, ge=0, description="Number of hands played")
 
 
@@ -175,7 +179,9 @@ class PlayerState(BaseModel):
     hole_cards: list[Card] = Field(default_factory=list, max_length=2)
     has_acted: bool = Field(default=False)
     last_action: ActionType | None = None
-    profile: OpponentProfile | None = Field(default=None, description="Opponent tracking profile if available")
+    profile: OpponentProfile | None = Field(
+        default=None, description="Opponent tracking profile if available"
+    )
 
 
 class TableState(BaseModel):
