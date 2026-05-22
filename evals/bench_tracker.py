@@ -2,15 +2,15 @@
 Benchmark for ObjectTracker performance.
 """
 
-import time
 import sys
-import os
+import time
 
 # Add project root to path
 sys.path.insert(0, ".")
 
 from libs.common.schemas import BoundingBox, Detection, DetectionClass
 from services.vision_core.tracker import ObjectTracker
+
 
 def make_detections(n: int, frame_idx: int = 0):
     return [

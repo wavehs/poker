@@ -1,6 +1,5 @@
-import time
-import sys
 import random
+import time
 
 valid_h_hands = [(random.randint(0, 51), random.randint(0, 51)) for _ in range(1000)]
 v_hand = (1, 2)

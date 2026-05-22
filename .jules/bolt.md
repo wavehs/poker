@@ -4,3 +4,6 @@
 ## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
 **Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
 **Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
+## 2024-05-22 - Python Local Variables in Hot Loops
+**Learning:** In highly nested Python hot loops (like `compute_range_vs_range_equity`), attribute lookups like `self.evaluator.evaluate` add up significantly over millions of iterations. The same applies to using `list(v_hand)` which calls a C-level constructor vs list unpacking `[v0, v1] + full_board`.
+**Action:** Extract deep attribute lookups (methods, etc) to a local variable `evaluate = self.evaluator.evaluate` before the loop. Replace object constructor conversions like `list()` with manual unpacking and list concatenation where sizes are known and small (e.g., pairs of cards).
