@@ -392,9 +392,14 @@ class EquitySolver:
         if self.enable_cache:
             self._board_cache = {}
 
+        # ⚡ Bolt Optimization: Use a pre-allocated boolean array for rejection sampling.
+        # Track all cards currently in the deck. We initialize the forbidden array
+        # to True for cards not in the deck, and False for cards available to draw.
         forbidden = [False] * 52
-        for b in board_ints:
-            forbidden[b] = True
+        for d in range(52):
+            forbidden[d] = True
+        for c in deck:
+            forbidden[c] = False
 
         for batch_start in range(0, sims, self.step_size):
             batch_end = min(batch_start + self.step_size, sims)
@@ -406,11 +411,21 @@ class EquitySolver:
                     if len(deck) - 2 < random_cards_needed:
                         continue
 
-                    # ⚡ Bolt Optimization: Use random.sample over a dynamically filtered deck.
-                    # This is faster than while-loop choice with element membership checks.
                     o1, o2 = opp_hand[0], opp_hand[1]
-                    tmp_deck = [c for c in deck if c != o1 and c != o2]
-                    sampled_deck = random.sample(tmp_deck, random_cards_needed)
+
+                    # ⚡ Bolt Optimization: Rejection sampling is faster than random.sample
+                    # for small draws.
+                    forbidden[o1] = True
+                    forbidden[o2] = True
+
+                    sampled_deck = []
+                    drawn = 0
+                    while drawn < random_cards_needed:
+                        c = random.choice(deck)
+                        if not forbidden[c]:
+                            forbidden[c] = True
+                            sampled_deck.append(c)
+                            drawn += 1
 
                     # Inject the opponent hand into sampled_deck to match
                     # the signature expectation where opponents are drawn sequentially
@@ -431,7 +446,18 @@ class EquitySolver:
                         cards_needed, profile,
                     )
                 else:
-                    sampled_deck = random.sample(deck, random_cards_needed)
+                    sampled_deck = []
+                    drawn = 0
+                    while drawn < random_cards_needed:
+                        c = random.choice(deck)
+                        if not forbidden[c]:
+                            forbidden[c] = True
+                            sampled_deck.append(c)
+                            drawn += 1
+
+                    for s in sampled_deck:
+                        forbidden[s] = False
+
                     result = self._simulate_once_int(
                         hero_ints, board_ints, sampled_deck, num_opponents,
                         cards_needed, profile,
@@ -568,6 +594,9 @@ class EquitySolver:
         # Memory tracking of used cards avoids multiple `in` operator checks
         forbidden = [False] * 52
 
+        # ⚡ Bolt Optimization: Extract self.evaluator.evaluate for faster method dispatch
+        evaluate = self.evaluator.evaluate
+
         for _ in range(sims):
             v_hand = random.choice(valid_v_hands)
 
@@ -577,30 +606,33 @@ class EquitySolver:
 
             v0, v1 = v_hand
 
+            # ⚡ Bolt Optimization: Use rejection sampling instead of random.sample
+            # Mark villain cards as used
+            forbidden[v0] = True
+            forbidden[v1] = True
+
             # Draw board
-            # ⚡ Bolt Optimization: Use random.sample over a dynamically filtered deck.
-            o1, o2 = v_hand[0], v_hand[1]
-            tmp_deck = [c for c in deck if c != o1 and c != o2]
-            sampled_board = random.sample(tmp_deck, cards_needed)
+            sampled_board = []
+            drawn = 0
+            while drawn < cards_needed:
+                c = random.choice(deck)
+                if not forbidden[c]:
+                    forbidden[c] = True
+                    sampled_board.append(c)
+                    drawn += 1
 
             full_board = board_ints + sampled_board
 
             # Evaluate villain
-            v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
-
-            # Construct O(1) lookup for forbidden cards to optimize hero hand filtering
-            # ~4x faster than repeated membership checks inside the hot loop
-            forbidden = set(v_hand) | set(sampled_board)
+            v_rank = evaluate([v0, v1] + full_board)
 
             # Evaluate hero hands
-            # ⚡ Bolt Optimization: Use forbidden set instead of list lookups in loop.
-            forbidden = {o1, o2}
-            forbidden.update(sampled_board)
             for h_hand in valid_h_hands:
-                if h_hand[0] in forbidden or h_hand[1] in forbidden:
+                h0, h1 = h_hand
+                if forbidden[h0] or forbidden[h1]:
                     continue
 
-                h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
+                h_rank = evaluate([h0, h1] + full_board)
 
                 if h_rank > v_rank:
                     wins[h_hand] += 1
