@@ -4,3 +4,6 @@
 ## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
 **Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
 **Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
+## 2024-05-18 - Hot Loop Tuple Unpacking vs List Constructors
+**Learning:** Inside tight Python loops, avoiding type constructors like `list(tuple_var)` in favor of manual unpacking and list creation (e.g., `[t0, t1] + other_list`) provides measurable performance benefits by avoiding dynamic constructor overhead. This is especially true when array sizes are static and known.
+**Action:** When working in inner performance-critical loops like Monte Carlo simulations, prefer static list allocation `[v_hand[0], v_hand[1]]` over dynamic type casting `list(v_hand)` for small tuples.
