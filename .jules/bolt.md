@@ -4,3 +4,6 @@
 ## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
 **Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
 **Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
+## 2026-06-02 - Prevent unrequested global linting
+**Learning:** Running `ruff check . --fix` applies aggressive unrequested linting fixes (like re-ordering imports) across the entire repository, cluttering up Pull Requests with unrelated diffs.
+**Action:** To automatically fix linting errors, use `ruff check <file> --fix` instead of `ruff check . --fix`. Avoid using `ruff check . --fix` at the root.
