@@ -578,29 +578,41 @@ class EquitySolver:
             v0, v1 = v_hand
 
             # Draw board
-            # ⚡ Bolt Optimization: Use random.sample over a dynamically filtered deck.
-            o1, o2 = v_hand[0], v_hand[1]
-            tmp_deck = [c for c in deck if c != o1 and c != o2]
-            sampled_board = random.sample(tmp_deck, cards_needed)
+            # ⚡ Bolt Optimization: Rejection sampling with a pre-allocated forbidden array is faster
+            # than list comprehensions + random.sample for drawing a few cards
+            o1, o2 = v0, v1
+
+            forbidden[o1] = True
+            forbidden[o2] = True
+
+            sampled_board = []
+            while len(sampled_board) < cards_needed:
+                c = random.choice(deck)
+                if not forbidden[c]:
+                    forbidden[c] = True
+                    sampled_board.append(c)
 
             full_board = board_ints + sampled_board
 
             # Evaluate villain
-            v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
+            v_rank = self.evaluator.evaluate([o1, o2] + full_board)
 
             # Construct O(1) lookup for forbidden cards to optimize hero hand filtering
             # ~4x faster than repeated membership checks inside the hot loop
-            forbidden = set(v_hand) | set(sampled_board)
+            forbidden[o1] = True
+            forbidden[o2] = True
+            for s in sampled_board:
+                forbidden[s] = True
 
             # Evaluate hero hands
-            # ⚡ Bolt Optimization: Use forbidden set instead of list lookups in loop.
-            forbidden = {o1, o2}
-            forbidden.update(sampled_board)
+            # ⚡ Bolt Optimization: Use pre-allocated boolean array instead of set/dict in loop.
+            eval_func = self.evaluator.evaluate
             for h_hand in valid_h_hands:
-                if h_hand[0] in forbidden or h_hand[1] in forbidden:
+                h0, h1 = h_hand[0], h_hand[1]
+                if forbidden[h0] or forbidden[h1]:
                     continue
 
-                h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
+                h_rank = eval_func([h0, h1] + full_board)
 
                 if h_rank > v_rank:
                     wins[h_hand] += 1
@@ -609,8 +621,8 @@ class EquitySolver:
                 totals[h_hand] += 1
 
             # ⚡ Bolt: Unmark forbidden cards to reuse array
-            forbidden[v0] = False
-            forbidden[v1] = False
+            forbidden[o1] = False
+            forbidden[o2] = False
             for s in sampled_board:
                 forbidden[s] = False
 
