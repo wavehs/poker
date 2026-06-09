@@ -568,6 +568,9 @@ class EquitySolver:
         # Memory tracking of used cards avoids multiple `in` operator checks
         forbidden = [False] * 52
 
+        # ⚡ Bolt: Extract evaluate method to avoid attribute lookup overhead in hot loop
+        evaluate = self.evaluator.evaluate
+
         for _ in range(sims):
             v_hand = random.choice(valid_v_hands)
 
@@ -579,28 +582,29 @@ class EquitySolver:
 
             # Draw board
             # ⚡ Bolt Optimization: Use random.sample over a dynamically filtered deck.
-            o1, o2 = v_hand[0], v_hand[1]
-            tmp_deck = [c for c in deck if c != o1 and c != o2]
+            tmp_deck = [c for c in deck if c != v0 and c != v1]
             sampled_board = random.sample(tmp_deck, cards_needed)
 
             full_board = board_ints + sampled_board
 
             # Evaluate villain
-            v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
+            # ⚡ Bolt Optimization: Avoid dynamic list constructor overhead
+            v_rank = evaluate([v0, v1] + full_board)
 
-            # Construct O(1) lookup for forbidden cards to optimize hero hand filtering
-            # ~4x faster than repeated membership checks inside the hot loop
-            forbidden = set(v_hand) | set(sampled_board)
+            # ⚡ Bolt Optimization: Mark cards in O(1) boolean array instead of sets
+            forbidden[v0] = True
+            forbidden[v1] = True
+            for s in sampled_board:
+                forbidden[s] = True
 
             # Evaluate hero hands
-            # ⚡ Bolt Optimization: Use forbidden set instead of list lookups in loop.
-            forbidden = {o1, o2}
-            forbidden.update(sampled_board)
             for h_hand in valid_h_hands:
-                if h_hand[0] in forbidden or h_hand[1] in forbidden:
+                h0, h1 = h_hand
+                if forbidden[h0] or forbidden[h1]:
                     continue
 
-                h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
+                # ⚡ Bolt Optimization: Avoid dynamic list constructor overhead
+                h_rank = evaluate([h0, h1] + full_board)
 
                 if h_rank > v_rank:
                     wins[h_hand] += 1
