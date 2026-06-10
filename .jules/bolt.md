@@ -4,3 +4,12 @@
 ## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
 **Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
 **Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
+## 2024-06-05 - Avoid List Constructors in Hot Loops
+**Learning:** In highly iterated paths such as Monte Carlo solvers (`compute_range_vs_range_equity`), using dynamic type constructors like `list(tuple)` adds significant object allocation overhead. Manual unpacking (e.g. `[t0, t1] + array`) provides measurable performance improvement by sidestepping constructor logic.
+**Action:** Always prefer manual unpacking and direct element addition over object constructors in performance-critical inner loops where tuples are converted to lists.
+## 2024-06-05 - Object Method Assignment for Loops
+**Learning:** Method calls via an object attribute (e.g., `self.evaluator.evaluate(cards)`) inside hot loops incur significant lookup overhead for both the attribute and the method on every iteration. Assigning the method to a local variable (`evaluate = self.evaluator.evaluate`) before the loop provides a nice reduction in evaluation time.
+**Action:** Lift method lookups out of hot loops to save Python attribute lookup overhead.
+## 2024-06-05 - Trust tests over code review bots
+**Learning:** The code review bot hallucinated a `NameError` for `o1` and `o2` claiming they were undefined, and hallucinated that cards from previous simulations remain "forbidden". However, my review of `services/solver_core/solver.py` via `sed` explicitly shows `o1, o2 = v_hand[0], v_hand[1]` immediately prior to its usage, and lines 619-623 explicitly contain the loop unmarking: `forbidden[v0] = False`. The tests also pass and test scripts prove no NameError occurs.
+**Action:** Always trust tests and actual file state over AI-generated code reviews. The code review bots lose context on large files if definitions fall outside their internal diff context limits.
