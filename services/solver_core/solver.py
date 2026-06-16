@@ -578,10 +578,17 @@ class EquitySolver:
             v0, v1 = v_hand
 
             # Draw board
-            # ⚡ Bolt Optimization: Use random.sample over a dynamically filtered deck.
+            # ⚡ Bolt Optimization: Use while loop with random.choice and O(1) tracking array
+            # over random.sample on dynamically filtered deck.
             o1, o2 = v_hand[0], v_hand[1]
-            tmp_deck = [c for c in deck if c != o1 and c != o2]
-            sampled_board = random.sample(tmp_deck, cards_needed)
+            forbidden[o1] = True
+            forbidden[o2] = True
+            sampled_board = []
+            while len(sampled_board) < cards_needed:
+                c = random.choice(deck)
+                if not forbidden[c]:
+                    forbidden[c] = True
+                    sampled_board.append(c)
 
             full_board = board_ints + sampled_board
 
@@ -590,14 +597,11 @@ class EquitySolver:
 
             # Construct O(1) lookup for forbidden cards to optimize hero hand filtering
             # ~4x faster than repeated membership checks inside the hot loop
-            forbidden = set(v_hand) | set(sampled_board)
 
             # Evaluate hero hands
-            # ⚡ Bolt Optimization: Use forbidden set instead of list lookups in loop.
-            forbidden = {o1, o2}
-            forbidden.update(sampled_board)
+            # ⚡ Bolt Optimization: Use pre-allocated boolean array over set creations in loop.
             for h_hand in valid_h_hands:
-                if h_hand[0] in forbidden or h_hand[1] in forbidden:
+                if forbidden[h_hand[0]] or forbidden[h_hand[1]]:
                     continue
 
                 h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
