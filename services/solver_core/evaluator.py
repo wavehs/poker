@@ -370,10 +370,11 @@ class TreysEvaluator:
             # treys.evaluate needs hand(2) + board(3-5)
             score = self._evaluator.evaluate(treys_cards[2:], treys_cards[:2])
         elif len(treys_cards) >= 6:
-            # Find best 5-card combination
+            # ⚡ Bolt Optimization: Unroll slicing inside hot loop and avoid lists.
             best = 999_999
-            for combo in itertools.combinations(treys_cards, 5):
-                score = self._evaluator.evaluate(list(combo[2:]), list(combo[:2]))
+            evaluate = self._evaluator.evaluate
+            for c0, c1, c2, c3, c4 in itertools.combinations(treys_cards, 5):
+                score = evaluate((c2, c3, c4), (c0, c1))
                 if score < best:
                     best = score
             score = best
