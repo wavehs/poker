@@ -4,3 +4,6 @@
 ## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
 **Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
 **Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
+## 2026-06-20 - Monte Carlo Array State Leakage
+**Learning:** When optimizing hot loops with pre-allocated O(1) boolean arrays (like `forbidden`), ensure the array is not inadvertently overwritten by a Python `set` or `dict` during the loop. Re-assigning the reference breaks the optimization and causes type errors when attempting to clean up state by index assignment.
+**Action:** Verify variables in performance hot paths retain their intended optimized types (e.g. lists of booleans) and use index assignment rather than entire reassignment.
