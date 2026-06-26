@@ -588,16 +588,15 @@ class EquitySolver:
             # Evaluate villain
             v_rank = self.evaluator.evaluate(list(v_hand) + full_board)
 
-            # Construct O(1) lookup for forbidden cards to optimize hero hand filtering
-            # ~4x faster than repeated membership checks inside the hot loop
-            forbidden = set(v_hand) | set(sampled_board)
+            # ⚡ Bolt Optimization: Mark forbidden cards in O(1) tracking array
+            forbidden[v0] = True
+            forbidden[v1] = True
+            for s in sampled_board:
+                forbidden[s] = True
 
             # Evaluate hero hands
-            # ⚡ Bolt Optimization: Use forbidden set instead of list lookups in loop.
-            forbidden = {o1, o2}
-            forbidden.update(sampled_board)
             for h_hand in valid_h_hands:
-                if h_hand[0] in forbidden or h_hand[1] in forbidden:
+                if forbidden[h_hand[0]] or forbidden[h_hand[1]]:
                     continue
 
                 h_rank = self.evaluator.evaluate(list(h_hand) + full_board)
