@@ -4,3 +4,10 @@
 ## 2024-05-18 - Hand Evaluator Memory Allocations in Hot Paths
 **Learning:** `_evaluate_five_int` was utilizing `dict` to count elements and calling `sorted()` to identify duplicate frequencies. Since this function is called inside the innermost loops of Monte Carlo simulations millions of times, avoiding object allocations entirely and just relying on comparisons over pre-sorted array elements (`sr0 == sr1`) gave a massive ~2.7x speedup for pure evaluation and significantly dropped full simulation latencies.
 **Action:** In Python performance-critical hot paths, try to remove data structures like dicts, sets, and Counter in favor of simple boolean logic and manual loop unrolling, particularly for fixed-size inputs.
+## 2024-05-18 - Monte Carlo Hand Filtering Array Mutation
+**Learning:** `TypeError: 'set' object does not support item assignment` occurs if a pre-allocated boolean array (`forbidden = [False] * 52`) is mistakenly re-assigned to a Python `set` or result of a set union operation (`forbidden = set(...) | ...`) inside a hot loop, which breaks index assignments. Always mutate indices in the boolean array directly rather than reassigning the variable.
+**Action:** When filtering out specific hands in an inner Monte Carlo loop using `forbidden` O(1) checks, always initialize a `[False] * 52` boolean list outside the hot loop and update the indices directly (e.g. `forbidden[v0] = True`), and then reset those items (e.g. `forbidden[v0] = False`) at the end of the simulation.
+
+## 2024-05-18 - Hot Loop Tuple Unpacking Concatenation
+**Learning:** Inside tight Python loops (like Monte Carlo simulations where lists of cards are built), avoiding type constructors like `list(tuple_var)` in favor of manual list creation and unpacking (e.g., `[t0, t1] + full_board`) avoids dynamic constructor and iteration overhead and is tangibly faster.
+**Action:** Replace `list(my_tuple) + other_list` with `[my_tuple[0], my_tuple[1]] + other_list` in performance-critical code when the tuple length is small and fixed.

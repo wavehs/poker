@@ -1,11 +1,12 @@
-import time
 import sys
+import time
 
 sys.path.insert(0, ".")
 
 from libs.common.schemas import Card, Rank, Suit
 from services.solver_core.evaluator import TreysEvaluator
 from services.solver_core.solver import EquitySolver
+
 
 def _card(rank_str: str, suit_str: str) -> Card:
     _ranks = {"2": Rank.TWO, "3": Rank.THREE, "4": Rank.FOUR, "5": Rank.FIVE,
