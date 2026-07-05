@@ -1,5 +1,6 @@
 """Solver Core — equity calculation and Monte Carlo simulation."""
 
+from services.solver_core.calculator import calculate_spr, get_spr_advice
 from services.solver_core.evaluator import (
     BuiltinEvaluator,
     Eval7Evaluator,
@@ -9,8 +10,6 @@ from services.solver_core.evaluator import (
     get_evaluator_by_name,
 )
 from services.solver_core.solver import EquitySolver, SolverProfile
-
-from services.solver_core.calculator import calculate_spr, get_spr_advice
 
 __all__ = [
     "EquitySolver",

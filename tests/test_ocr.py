@@ -58,6 +58,7 @@ class TestCreateBackend:
 
 from services.ocr_core.preprocess import contrast_boost, upscale_x2
 
+
 class TestPreprocessing:
     def test_contrast_boost(self):
         img = np.full((10, 10, 3), 100, dtype=np.uint8)
@@ -202,6 +203,7 @@ class TestOCREngineMock:
 # ─── OCREngine — Real OCR Edge Cases ────────────────────────────────────────
 
 from unittest.mock import MagicMock, patch
+
 
 class TestOCREngineEdgeCases:
     def test_ocr_fallback_low_confidence(self):
